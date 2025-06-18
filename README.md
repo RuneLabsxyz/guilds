@@ -1,4 +1,3 @@
-````markdown
 # PonziLand Guilds Specifications (v0.1)
 
 Welcome to the **PonziLand Guilds** module—designed to introduce social, political, and economic dynamics through onchain guilds.
@@ -135,6 +134,3 @@ Contributions welcome! Fork, branch, code, test, and submit a PR. Follow code st
 ## 📄 License
 
 MIT. See [LICENSE](LICENSE) for details.
-
-```
-```
