@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+curl -X POST "https://api.cairo-coder.com/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Write a simple Cairo contract that implements a counter"
+      }
+    ]
+  }'
