@@ -1,14 +1,13 @@
 #[starknet::contract]
-mod GuildManagement {
-    use starknet::ContractAddress;
+pub mod GuildManagement {
     use starknet::storage::{
-        Map, StoragePointerReadAccess, StoragePointerWriteAccess, StorageMapReadAccess,
-        StorageMapWriteAccess
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
     };
-    use starknet::get_caller_address;
+    use starknet::{ContractAddress, get_caller_address};
 
     #[starknet::interface]
-    trait IGuildManagement<TContractState> {
+    pub trait IGuildManagement<TContractState> {
         fn create_guild(ref self: TContractState) -> u256;
         fn invite_to_guild(ref self: TContractState, guild_id: u256, user: ContractAddress);
         fn promote(ref self: TContractState, guild_id: u256, user: ContractAddress);
@@ -82,7 +81,7 @@ mod GuildManagement {
     }
 
     #[abi(embed_v0)]
-    impl GuildManagementImpl of IGuildManagement<ContractState> {
+    pub impl GuildManagementImpl of IGuildManagement<ContractState> {
         fn create_guild(ref self: ContractState) -> u256 {
             let caller = get_caller_address();
             let guild_id = self.next_guild_id.read();
@@ -140,7 +139,7 @@ mod GuildManagement {
             let user_role = self.get_role(guild_id, user);
             assert(
                 user_role == Role::Member || user_role == Role::Officer,
-                'Kick only members/officers'
+                'Kick only members/officers',
             );
 
             self.guild_members.write((guild_id, user), Role::None);
@@ -161,7 +160,7 @@ mod GuildManagement {
         }
 
         fn assert_is_creator_or_officer(
-            self: @ContractState, guild_id: u256, user: ContractAddress
+            self: @ContractState, guild_id: u256, user: ContractAddress,
         ) {
             let role = self.get_role(guild_id, user);
             assert(role == Role::Creator || role == Role::Officer, 'Not authorized');

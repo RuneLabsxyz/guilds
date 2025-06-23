@@ -1,3 +1,3 @@
-mod guild {
-    mod manage;
+pub mod guild {
+    pub mod manage;
 }
