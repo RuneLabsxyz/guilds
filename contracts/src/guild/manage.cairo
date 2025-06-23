@@ -10,6 +10,7 @@ pub mod GuildManagement {
     pub trait IGuildManagement<TContractState> {
         fn create_guild(ref self: TContractState) -> u256;
         fn invite_to_guild(ref self: TContractState, guild_id: u256, user: ContractAddress);
+        fn accept_invite(ref self: TContractState, guild_id: u256);
         fn promote(ref self: TContractState, guild_id: u256, user: ContractAddress);
         fn demote(ref self: TContractState, guild_id: u256, user: ContractAddress);
         fn kick(ref self: TContractState, guild_id: u256, user: ContractAddress);
@@ -29,6 +30,7 @@ pub mod GuildManagement {
         next_guild_id: u256,
         guild_members: Map<(u256, ContractAddress), Role>,
         guild_creator: Map<u256, ContractAddress>,
+        pending_invites: Map<(u256, ContractAddress), bool>,
     }
 
     #[event]
@@ -39,6 +41,7 @@ pub mod GuildManagement {
         UserPromoted: UserPromoted,
         UserDemoted: UserDemoted,
         UserKicked: UserKicked,
+        InviteAccepted: InviteAccepted,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -80,6 +83,13 @@ pub mod GuildManagement {
         kicked_by: ContractAddress,
     }
 
+    #[derive(Drop, starknet::Event)]
+    struct InviteAccepted {
+        #[key]
+        guild_id: u256,
+        user: ContractAddress,
+    }
+
     #[abi(embed_v0)]
     pub impl GuildManagementImpl of IGuildManagement<ContractState> {
         fn create_guild(ref self: ContractState) -> u256 {
@@ -103,9 +113,26 @@ pub mod GuildManagement {
             let user_role = self.get_role(guild_id, user);
             assert(user_role == Role::None, 'User in guild');
 
-            self.guild_members.write((guild_id, user), Role::Member);
+            let pending = self.pending_invites.read((guild_id, user));
+            assert(!pending, 'Already invited');
+
+            self.pending_invites.write((guild_id, user), true);
 
             self.emit(Event::UserInvited(UserInvited { guild_id, user, invited_by: caller }));
+        }
+
+        fn accept_invite(ref self: ContractState, guild_id: u256) {
+            let caller = get_caller_address();
+            let pending = self.pending_invites.read((guild_id, caller));
+            assert(pending, 'No pending invite');
+
+            let user_role = self.get_role(guild_id, caller);
+            assert(user_role == Role::None, 'Already in guild');
+
+            self.guild_members.write((guild_id, caller), Role::Member);
+            self.pending_invites.write((guild_id, caller), false);
+
+            self.emit(Event::InviteAccepted(InviteAccepted { guild_id, user: caller }));
         }
 
         fn promote(ref self: ContractState, guild_id: u256, user: ContractAddress) {
