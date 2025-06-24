@@ -6,3 +6,7 @@ pub mod guild {
 pub mod mocks {
     pub mod guild;
 }
+
+pub mod tests {
+    pub mod constants;
+}

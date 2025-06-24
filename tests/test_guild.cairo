@@ -2,9 +2,14 @@ use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
-use starknet::ContractAddress;
-
+use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER};
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address, test_address,
+};
+use starknet::storage::{
+    Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+    StoragePointerWriteAccess,
+};
 
 type ComponentState = GuildComponent::ComponentState<GuildMock::ContractState>;
 
@@ -34,8 +39,22 @@ fn test_guild_invite() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 }
+
+#[test]
+#[should_panic(expected: "Caller is not a guild member")]
+fn test_guild_invite_nonowner() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+
+    start_cheat_caller_address(test_address(), BOB);
+
+    state.invite_member(ALICE);
+}
+
 
 #[test]
 #[should_panic(expected: "Member already exists in the guild")]
@@ -45,9 +64,9 @@ fn test_guild_double_invite() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 }
 
 
@@ -57,10 +76,15 @@ fn test_guild_kick() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
-
-    state.invite_member(123.try_into().unwrap());
-
-    state.kick_member(123.try_into().unwrap());
+    // Create a kickable rank
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Invite ALICE and assign her the kickable rank
+    state.invite_member(ALICE);
+    let mut alice_member = state.members.read(ALICE);
+    alice_member.rank_id = rank_id;
+    state.members.write(ALICE, alice_member);
+    state.kick_member(ALICE);
 }
 #[test]
 #[should_panic(expected: "Member does not exist in the guild")]
@@ -69,10 +93,18 @@ fn test_guild_double_kick() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
-
-    state.invite_member(123.try_into().unwrap());
-
-    state.kick_member(123.try_into().unwrap());
-    state.kick_member(123.try_into().unwrap());
+    // Create a kickable rank
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Invite BOB and assign him the kickable rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // First kick should succeed
+    state.kick_member(BOB);
+    // Second kick should fail with "Member does not exist in the guild"
+    // (the test should expect this panic)
+    state.kick_member(BOB);
 }
 
