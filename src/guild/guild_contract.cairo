@@ -94,7 +94,7 @@ pub mod GuildComponent {
         }
 
         fn max_rank(self: @ComponentState<TContractState>) -> u8 {
-            5
+            self.rank_count.read()
         }
     }
 
