@@ -43,7 +43,7 @@ fn test_guild_invite() {
 }
 
 #[test]
-#[should_panic(expected: "Only owner can invite members")]
+#[should_panic(expected: "Caller is not a guild member")]
 fn test_guild_invite_nonowner() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
@@ -76,9 +76,14 @@ fn test_guild_kick() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
-
+    // Create a kickable rank
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Invite ALICE and assign her the kickable rank
     state.invite_member(ALICE);
-
+    let mut alice_member = state.members.read(ALICE);
+    alice_member.rank_id = rank_id;
+    state.members.write(ALICE, alice_member);
     state.kick_member(ALICE);
 }
 #[test]
@@ -88,10 +93,18 @@ fn test_guild_double_kick() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
-
-    state.invite_member(ALICE);
-
-    state.kick_member(ALICE);
-    state.kick_member(ALICE);
+    // Create a kickable rank
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Invite BOB and assign him the kickable rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // First kick should succeed
+    state.kick_member(BOB);
+    // Second kick should fail with "Member does not exist in the guild"
+    // (the test should expect this panic)
+    state.kick_member(BOB);
 }
 

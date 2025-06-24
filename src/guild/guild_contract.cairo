@@ -7,9 +7,9 @@ use starknet::{ContractAddress, get_caller_address};
 
 #[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
 pub struct Member {
-    addr: ContractAddress,
-    rank_id: u8, // Rank ID of the member
-    is_creator: bool,
+    pub addr: ContractAddress,
+    pub rank_id: u8, // Rank ID of the member
+    pub is_creator: bool,
 }
 
 #[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
@@ -45,7 +45,15 @@ pub mod GuildComponent {
         fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
             let caller = get_caller_address();
 
-            assert!(caller == self.owner.read(), "Only owner can invite members");
+            // Owner can always invite
+            if caller != self.owner.read() {
+                // Check if caller is a member
+                let caller_member = self.members.read(caller);
+                assert!(caller_member.addr != Zero::zero(), "Caller is not a guild member");
+                // Get caller's rank
+                let caller_rank = self.ranks.read(caller_member.rank_id);
+                assert!(caller_rank.can_invite, "Caller does not have permission to invite");
+            }
             assert!(
                 self.members.read(member).addr == Zero::zero(),
                 "Member already exists in the guild",
@@ -59,12 +67,21 @@ pub mod GuildComponent {
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
             let caller = get_caller_address();
 
-            assert!(caller == self.owner.read(), "Only owner can kick members");
+            // Owner can always kick
+            if caller != self.owner.read() {
+                // Check if caller is a member
+                let caller_member = self.members.read(caller);
+                assert!(caller_member.addr != Zero::zero(), "Caller is not a guild member");
+                // Get caller's rank
+                let caller_rank = self.ranks.read(caller_member.rank_id);
+                assert!(caller_rank.can_kick, "Caller does not have permission to kick");
+            }
             // Check if the member is in the guild
-            assert!(
-                self.members.read(member).addr != Zero::zero(),
-                "Member does not exist in the guild",
-            );
+            let target_member = self.members.read(member);
+            assert!(target_member.addr != Zero::zero(), "Member does not exist in the guild");
+            // Check if the target member can be kicked
+            let target_rank = self.ranks.read(target_member.rank_id);
+            assert!(target_rank.can_be_kicked, "Target member cannot be kicked");
 
             // Remove by writing default value
             self

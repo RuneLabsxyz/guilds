@@ -79,3 +79,129 @@ fn test_delete_rank() {
     state.delete_rank(rank_id);
 }
 
+#[test]
+fn test_owner_can_invite_and_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates a kickable rank
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Owner invites BOB
+    state.invite_member(BOB);
+    // Set BOB's rank to the kickable rank
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // Owner kicks BOB
+    state.kick_member(BOB);
+}
+
+#[test]
+fn test_member_with_permission_can_invite_and_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates a new rank with can_invite and can_kick true
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Owner invites BOB and assigns him the new rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // BOB invites CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
+    state.invite_member(CHARLIE);
+    // Set CHARLIE's rank to the kickable rank
+    let mut charlie_member = state.members.read(CHARLIE);
+    charlie_member.rank_id = rank_id;
+    state.members.write(CHARLIE, charlie_member);
+    // BOB kicks CHARLIE
+    state.kick_member(CHARLIE);
+}
+
+#[test]
+#[should_panic(expected: "Caller does not have permission to invite")]
+fn test_member_without_invite_permission_cannot_invite() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates a new rank with can_invite false
+    state.create_rank(2, false, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Owner invites BOB and assigns him the new rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // BOB tries to invite CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
+    state.invite_member(CHARLIE);
+}
+
+#[test]
+#[should_panic(expected: "Caller does not have permission to kick")]
+fn test_member_without_kick_permission_cannot_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates a new rank with can_kick false
+    state.create_rank(2, true, false, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Owner invites BOB and assigns him the new rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // Owner invites CHARLIE
+    state.invite_member(CHARLIE);
+    // BOB tries to kick CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
+    state.kick_member(CHARLIE);
+}
+
+#[test]
+#[should_panic(expected: "Target member cannot be kicked")]
+fn test_cannot_kick_member_with_cannot_be_kicked_rank() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates a new rank with can_be_kicked false
+    state.create_rank(2, true, true, 2, false);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Owner invites BOB and assigns him the new rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // Owner invites CHARLIE
+    state.invite_member(CHARLIE);
+    // Assign CHARLIE the cannot_be_kicked rank
+    let mut charlie_member = state.members.read(CHARLIE);
+    charlie_member.rank_id = rank_id;
+    state.members.write(CHARLIE, charlie_member);
+    // BOB tries to kick CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
+    state.kick_member(CHARLIE);
+}
+
+#[test]
+#[should_panic(expected: "Caller is not a guild member")]
+fn test_non_member_cannot_invite_or_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // ALICE is not a member
+    start_cheat_caller_address(test_address(), ALICE);
+    state.invite_member(BOB);
+    // Should panic before this, but also test kick
+    state.kick_member(BOB);
+}
+
