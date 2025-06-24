@@ -2,7 +2,7 @@ use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
-use snforge_std::{start_cheat_caller_address, test_address};
+use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
 
 
@@ -34,3 +34,40 @@ fn test_guild_invite() {
 
     state.invite_member(123.try_into().unwrap());
 }
+
+#[test]
+#[should_panic(expected: "Member already exists in the guild")]
+fn test_guild_double_invite() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    state.initializer(guild_name);
+
+    state.invite_member(123.try_into().unwrap());
+
+    state.invite_member(123.try_into().unwrap());
+}
+
+
+#[test]
+fn test_guild_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    state.initializer(guild_name);
+
+    state.invite_member(123.try_into().unwrap());
+
+    state.kick_member(123.try_into().unwrap());
+}
+#[test]
+#[should_panic(expected: "Member does not exist in the guild")]
+fn test_guild_double_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    state.initializer(guild_name);
+
+    state.invite_member(123.try_into().unwrap());
+
+    state.kick_member(123.try_into().unwrap());
+    state.kick_member(123.try_into().unwrap());
+}
+

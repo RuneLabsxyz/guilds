@@ -33,23 +33,25 @@ pub mod GuildComponent {
         fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
             let caller = get_caller_address();
 
-            if caller != self.owner.read() {
-                panic!("Only owner can invite members");
-            }
-            // Check if the member is already in the guild
-            if self.members.read(member).addr != Zero::zero() {
-                panic!("Member already exists in the guild");
-            }
+            assert!(caller == self.owner.read(), "Only owner can invite members");
+            assert!(
+                self.members.read(member).addr == Zero::zero(),
+                "Member already exists in the guild",
+            );
 
-            let new_member = Member { addr: caller, is_creator: false };
+            let new_member = Member { addr: member, is_creator: false };
             self.members.write(member, new_member);
         }
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
             let caller = get_caller_address();
 
-            if caller != self.owner.read() {
-                panic!("Only owner can kick members");
-            }
+            assert!(caller == self.owner.read(), "Only owner can kick members");
+            // Check if the member is in the guild
+            assert!(
+                self.members.read(member).addr != Zero::zero(),
+                "Member does not exist in the guild",
+            );
+
             // Remove by writing default value
             self.members.write(member, Member { addr: Zero::zero(), is_creator: false });
         }
