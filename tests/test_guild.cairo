@@ -1,5 +1,6 @@
 use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
+use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
 use snforge_std::{start_cheat_caller_address, test_address};
 use starknet::ContractAddress;
@@ -23,4 +24,13 @@ fn test_guild_initializer() {
     state.initializer(guild_name);
 
     assert_eq!(state.get_guild_name(), guild_name, "Guild name should match the initialized value");
+}
+
+#[test]
+fn test_guild_invite() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    state.initializer(guild_name);
+
+    state.invite_member(123.try_into().unwrap());
 }
