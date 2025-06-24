@@ -21,4 +21,6 @@ fn test_guild_initializer() {
 
     // Call the initializer
     state.initializer(guild_name);
+
+    assert_eq!(state.get_guild_name(), guild_name, "Guild name should match the initialized value");
 }
