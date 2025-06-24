@@ -19,7 +19,7 @@ fn COMPONENT_STATE() -> ComponentState {
 
 
 #[test]
-#[should_panic(expected: "Only owner can create ranks")]
+#[should_panic(expected: "Only owner can perform this action")]
 fn test_create_rank_and_permissions() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
@@ -43,7 +43,7 @@ fn test_create_rank_and_permissions() {
 }
 
 #[test]
-#[should_panic(expected: "Only owner can change rank permissions")]
+#[should_panic(expected: "Only owner can perform this action")]
 fn test_change_rank_permissions() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;

@@ -86,8 +86,20 @@ fn test_guild_kick() {
     state.members.write(ALICE, alice_member);
     state.kick_member(ALICE);
 }
+
 #[test]
-#[should_panic(expected: "Member does not exist in the guild")]
+#[should_panic(expected: "Target member does not exist in the guild")]
+fn test_phantom_guild_kick() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+
+    state.kick_member(ALICE);
+}
+
+#[test]
+#[should_panic(expected: "Target member does not exist in the guild")]
 fn test_guild_double_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
