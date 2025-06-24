@@ -8,13 +8,23 @@ use starknet::{ContractAddress, get_caller_address};
 #[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
 pub struct Member {
     addr: ContractAddress,
+    rank_id: u8, // Rank ID of the member
     is_creator: bool,
+}
+
+#[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
+pub struct Rank {
+    pub rank_name: felt252,
+    pub can_invite: bool,
+    pub can_kick: bool,
+    pub promote: u8, // 0 false, 1 upto 1 rank under, 2 upto 2 ranks under, etc.
+    pub can_be_kicked: bool // if false, this rank cannot be kicked or demoted by anyone. Vote required
 }
 
 #[starknet::component]
 pub mod GuildComponent {
     use crate::guild::interface;
-    use super::*;
+    use super::{*, StoragePointerReadAccess};
 
 
     #[storage]
@@ -22,6 +32,8 @@ pub mod GuildComponent {
         pub guild_name: felt252,
         pub owner: ContractAddress,
         pub members: Map<ContractAddress, Member>,
+        pub ranks: Map<u8, Rank>, // Maps rank ID to Rank
+        pub rank_count: u8 // Total number of ranks in the guild
     }
 
     // Component external logic
@@ -39,7 +51,9 @@ pub mod GuildComponent {
                 "Member already exists in the guild",
             );
 
-            let new_member = Member { addr: member, is_creator: false };
+            let new_member = Member {
+                addr: member, rank_id: self.rank_count.read(), is_creator: false,
+            };
             self.members.write(member, new_member);
         }
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
@@ -53,7 +67,9 @@ pub mod GuildComponent {
             );
 
             // Remove by writing default value
-            self.members.write(member, Member { addr: Zero::zero(), is_creator: false });
+            self
+                .members
+                .write(member, Member { addr: Zero::zero(), rank_id: 0, is_creator: false });
         }
     }
 
@@ -80,11 +96,21 @@ pub mod GuildComponent {
 
     #[generate_trait]
     pub impl InternalImpl<TContractState> of InternalTrait<TContractState> {
-        fn initializer(ref self: ComponentState<TContractState>, guild_name: felt252) {
+        fn initializer(
+            ref self: ComponentState<TContractState>, guild_name: felt252, rank_name: felt252,
+        ) {
             let caller = get_caller_address();
             self.guild_name.write(guild_name);
             self.owner.write(caller);
-            let creator = Member { addr: caller, is_creator: true };
+            let creator = Member { addr: caller, rank_id: 0, is_creator: true };
+            let rank = Rank {
+                rank_name: rank_name,
+                can_invite: true,
+                can_kick: true,
+                promote: 1, // can promote upto 1 rank under
+                can_be_kicked: false,
+            };
+            self.ranks.write(0, rank); // Rank 0 is the creator's rank
             self.members.write(caller, creator);
         }
     }

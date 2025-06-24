@@ -25,7 +25,7 @@ pub mod GuildMock {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, guild_name: felt252) {
-        self.guild.initializer(guild_name);
+    fn constructor(ref self: ContractState, guild_name: felt252, rank_name: felt252) {
+        self.guild.initializer(guild_name, rank_name);
     }
 }
