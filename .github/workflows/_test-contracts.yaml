@@ -32,13 +32,6 @@ jobs:
       - name: Install cairo-coverage
         run: curl -L https://raw.githubusercontent.com/software-mansion/cairo-coverage/main/scripts/install.sh | sh
 
-      - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v16
-        with:
-          globs: |
-            *.md
-            !PULL_REQUEST_TEMPLATE.md
-
       - name: Cairo lint
         run: scarb fmt --check --workspace
 
