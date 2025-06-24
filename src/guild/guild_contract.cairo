@@ -1,3 +1,4 @@
+use core::num::traits::{Bounded, Zero};
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
@@ -24,6 +25,36 @@ pub mod GuildComponent {
     }
 
     // Component external logic
+
+    #[embeddable_as(GuildImpl)]
+    impl Guild<
+        TContractState, +HasComponent<TContractState>,
+    > of interface::IGuild<ComponentState<TContractState>> {
+        fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+            let caller = get_caller_address();
+
+            if caller != self.owner.read() {
+                panic!("Only owner can invite members");
+            }
+            // Check if the member is already in the guild
+            if self.members.read(member).addr != Zero::zero() {
+                panic!("Member already exists in the guild");
+            }
+
+            let new_member = Member { addr: caller, is_creator: false };
+            self.members.write(member, new_member);
+        }
+        fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+            let caller = get_caller_address();
+
+            if caller != self.owner.read() {
+                panic!("Only owner can kick members");
+            }
+            // Remove by writing default value
+            self.members.write(member, Member { addr: Zero::zero(), is_creator: false });
+        }
+    }
+
     #[embeddable_as(GuildMetadataImpl)]
     impl GuildMetaData<
         TContractState, +HasComponent<TContractState>,

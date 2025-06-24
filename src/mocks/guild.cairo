@@ -6,6 +6,9 @@ pub mod GuildMock {
     component!(path: GuildComponent, storage: guild, event: GuildEvent);
 
     #[abi(embed_v0)]
+    impl GuildImpl = GuildComponent::GuildImpl<ContractState>;
+
+    #[abi(embed_v0)]
     impl GuildMetadataImpl = GuildComponent::GuildMetadataImpl<ContractState>;
 
     #[storage]
