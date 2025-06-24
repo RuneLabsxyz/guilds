@@ -46,6 +46,7 @@ pub mod GuildComponent {
         }
 
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+            self._validate_member(member);
             self._only_kicker(member);
             self._remove_member(member);
         }
@@ -220,6 +221,11 @@ pub mod GuildComponent {
         fn _validate_not_member(self: @ComponentState<TContractState>, member: ContractAddress) {
             let member = self.members.read(member);
             assert!(member.addr == Zero::zero(), "Member already exists in the guild");
+        }
+
+        fn _validate_member(self: @ComponentState<TContractState>, member: ContractAddress) {
+            let member = self.members.read(member);
+            assert!(member.addr != Zero::zero(), "Target member does not exist in the guild");
         }
     }
 }
