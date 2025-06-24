@@ -71,6 +71,69 @@ pub mod GuildComponent {
                 .members
                 .write(member, Member { addr: Zero::zero(), rank_id: 0, is_creator: false });
         }
+
+        /// Create a new rank with specified permissions and name.
+        fn create_rank(
+            ref self: ComponentState<TContractState>,
+            rank_name: felt252,
+            can_invite: bool,
+            can_kick: bool,
+            promote: u8,
+            can_be_kicked: bool,
+        ) {
+            let caller = get_caller_address();
+            assert!(caller == self.owner.read(), "Only owner can create ranks");
+            let rank_id = self.rank_count.read();
+            let new_rank = Rank {
+                rank_name: rank_name,
+                can_invite: can_invite,
+                can_kick: can_kick,
+                promote: promote,
+                can_be_kicked: can_be_kicked,
+            };
+            self.ranks.write(rank_id, new_rank);
+            self.rank_count.write(rank_id + 1_u8);
+        }
+
+        /// Delete a rank by its ID.
+        fn delete_rank(ref self: ComponentState<TContractState>, rank_id: u8) {
+            let caller = get_caller_address();
+            assert!(caller == self.owner.read(), "Only owner can delete ranks");
+            // Prevent deleting the creator's rank (rank 0)
+            assert!(rank_id != 0, "Cannot delete the creator's rank");
+            // Remove the rank by writing a default value
+            self
+                .ranks
+                .write(
+                    rank_id,
+                    Rank {
+                        rank_name: 0,
+                        can_invite: false,
+                        can_kick: false,
+                        promote: 0,
+                        can_be_kicked: false,
+                    },
+                );
+        }
+
+        /// Change the permissions of a rank by its ID.
+        fn change_rank_permissions(
+            ref self: ComponentState<TContractState>,
+            rank_id: u8,
+            can_invite: bool,
+            can_kick: bool,
+            promote: u8,
+            can_be_kicked: bool,
+        ) {
+            let caller = get_caller_address();
+            assert!(caller == self.owner.read(), "Only owner can change rank permissions");
+            let mut rank = self.ranks.read(rank_id);
+            rank.can_invite = can_invite;
+            rank.can_kick = can_kick;
+            rank.promote = promote;
+            rank.can_be_kicked = can_be_kicked;
+            self.ranks.write(rank_id, rank);
+        }
     }
 
     #[embeddable_as(GuildMetadataImpl)]

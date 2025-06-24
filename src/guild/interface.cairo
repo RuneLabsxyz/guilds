@@ -7,6 +7,29 @@ pub trait IGuild<TState> {
 
     /// Kick a member from the guild.
     fn kick_member(ref self: TState, member: ContractAddress);
+
+    /// Create a new rank with specified permissions and name.
+    fn create_rank(
+        ref self: TState,
+        rank_name: felt252,
+        can_invite: bool,
+        can_kick: bool,
+        promote: u8,
+        can_be_kicked: bool,
+    );
+
+    /// Delete a rank by its ID.
+    fn delete_rank(ref self: TState, rank_id: u8);
+
+    /// Change the permissions of a rank by its ID.
+    fn change_rank_permissions(
+        ref self: TState,
+        rank_id: u8,
+        can_invite: bool,
+        can_kick: bool,
+        promote: u8,
+        can_be_kicked: bool,
+    );
 }
 
 #[starknet::interface]

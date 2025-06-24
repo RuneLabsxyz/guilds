@@ -2,7 +2,10 @@ use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
+use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER};
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address, test_address,
+};
 use starknet::ContractAddress;
 
 
@@ -34,8 +37,22 @@ fn test_guild_invite() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 }
+
+#[test]
+#[should_panic(expected: "Only owner can invite members")]
+fn test_guild_invite_nonowner() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+
+    start_cheat_caller_address(test_address(), BOB);
+
+    state.invite_member(ALICE);
+}
+
 
 #[test]
 #[should_panic(expected: "Member already exists in the guild")]
@@ -45,9 +62,9 @@ fn test_guild_double_invite() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 }
 
 
@@ -58,9 +75,9 @@ fn test_guild_kick() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 
-    state.kick_member(123.try_into().unwrap());
+    state.kick_member(ALICE);
 }
 #[test]
 #[should_panic(expected: "Member does not exist in the guild")]
@@ -70,9 +87,9 @@ fn test_guild_double_kick() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(123.try_into().unwrap());
+    state.invite_member(ALICE);
 
-    state.kick_member(123.try_into().unwrap());
-    state.kick_member(123.try_into().unwrap());
+    state.kick_member(ALICE);
+    state.kick_member(ALICE);
 }
 
