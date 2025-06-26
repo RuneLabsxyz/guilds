@@ -1,3 +1,4 @@
+use core::option::Option;
 use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl, Rank};
 use guilds::guild::interface::IGuild;
@@ -10,7 +11,6 @@ use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
-use core::option::Option;
 
 
 type ComponentState = GuildComponent::ComponentState<GuildMock::ContractState>;

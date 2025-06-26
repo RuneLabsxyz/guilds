@@ -1,5 +1,5 @@
 use core::array::Array;
-use core::num::traits::{Bounded, Zero};
+use core::num::traits::Zero;
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
@@ -147,7 +147,10 @@ pub mod GuildComponent {
     #[generate_trait]
     pub impl InternalImpl<TContractState> of InternalTrait<TContractState> {
         fn initializer(
-            ref self: ComponentState<TContractState>, guild_name: felt252, rank_name: felt252, token_address: Option<ContractAddress>
+            ref self: ComponentState<TContractState>,
+            guild_name: felt252,
+            rank_name: felt252,
+            token_address: Option<ContractAddress>,
         ) {
             let caller = get_caller_address();
             self.guild_name.write(guild_name);

@@ -1,17 +1,17 @@
+use core::array::ArrayTrait;
 use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl, Rank};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::{GuildMock, IGuildMockDispatcher};
 use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER, TOKEN_ADDRESS};
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, declare, test_address, start_cheat_caller_address
+    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address, test_address,
 };
+use starknet::ContractAddress;
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
-use starknet::ContractAddress;
-use core::array::ArrayTrait;
 
 type ComponentState = GuildComponent::ComponentState<GuildMock::ContractState>;
 
@@ -24,7 +24,8 @@ fn test_guild_token_address_matches_erc20() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    // Simulate a deployed ERC20 token address (in real deployment, this would be the actual contract address)
+    // Simulate a deployed ERC20 token address (in real deployment, this would be the actual
+    // contract address)
 
     // Initialize the guild with the token address
     state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));

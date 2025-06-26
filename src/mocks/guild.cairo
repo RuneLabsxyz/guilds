@@ -9,8 +9,8 @@ pub trait IGuildMock<TContractState> {
 pub mod GuildMock {
     use guilds::guild::guild_contract::GuildComponent;
     use guilds::guild::guild_contract::GuildComponent::InternalImpl;
-    use openzeppelin_token::erc20::{ERC20Component, ERC20HooksEmptyImpl, DefaultConfig};
-    use starknet::{ContractAddress, get_caller_address};
+    use openzeppelin_token::erc20::{DefaultConfig, ERC20Component, ERC20HooksEmptyImpl};
+    use starknet::get_caller_address;
 
     // ERC20 Component
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
@@ -58,6 +58,8 @@ pub mod GuildMock {
         self.erc20.mint(creator, token_supply);
 
         // Save the token address in the guild
-        self.guild.initializer(guild_name, rank_name, Option::Some(starknet::get_contract_address()));
+        self
+            .guild
+            .initializer(guild_name, rank_name, Option::Some(starknet::get_contract_address()));
     }
 }
