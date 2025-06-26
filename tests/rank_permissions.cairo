@@ -107,14 +107,12 @@ fn test_member_with_permission_can_invite_and_kick() {
     // Owner creates a new rank with can_invite and can_kick true
     state.create_rank(2, true, true, 2, true);
 
-
     state.invite_member(BOB, Option::None);
     start_cheat_caller_address(test_address(), BOB);
     state.accept_invite();
     // Owner creates a worst rank with no permissions
     start_cheat_caller_address(test_address(), OWNER);
     state.create_rank(3, false, false, 3, true);
-
 
     // BOB invites CHARLIE
     start_cheat_caller_address(test_address(), BOB);

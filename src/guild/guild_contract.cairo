@@ -307,18 +307,27 @@ pub mod GuildComponent {
         }
 
         /// Internal: Add a pending invite
-        fn _add_pending_invite(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8) {
+        fn _add_pending_invite(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        ) {
             self.pending_invites.write(member, rank_id);
         }
 
         /// Internal: Validate that an address has a pending invite
-        fn _validate_pending_invite(self: @ComponentState<TContractState>, member: ContractAddress) {
+        fn _validate_pending_invite(
+            self: @ComponentState<TContractState>, member: ContractAddress,
+        ) {
             let rank_id = self.pending_invites.read(member);
-            assert!(rank_id != 0_u8 || self.rank_count.read() == 1_u8, "No pending invite for this address");
+            assert!(
+                rank_id != 0_u8 || self.rank_count.read() == 1_u8,
+                "No pending invite for this address",
+            );
         }
 
         /// Internal: Clear a pending invite
-        fn _clear_pending_invite(ref self: ComponentState<TContractState>, member: ContractAddress) {
+        fn _clear_pending_invite(
+            ref self: ComponentState<TContractState>, member: ContractAddress,
+        ) {
             self.pending_invites.write(member, 0_u8);
         }
     }
