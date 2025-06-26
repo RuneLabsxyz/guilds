@@ -1,5 +1,5 @@
 use guilds::guild::guild_contract::GuildComponent;
-use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
+use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl, Rank};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
 use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER};
@@ -10,7 +10,6 @@ use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
-use guilds::guild::guild_contract::GuildComponent::{Rank};
 
 
 type ComponentState = GuildComponent::ComponentState<GuildMock::ContractState>;
@@ -310,9 +309,15 @@ fn test_get_rank_permissions() {
     // There should be 3 ranks
     assert(ranks.len() == 3, 'Should have 3 ranks');
     // Expected ranks
-    let expected0 = Rank { rank_name: 1, can_invite: true, can_kick: true, promote: 1, can_be_kicked: false };
-    let expected1 = Rank { rank_name: 2, can_invite: true, can_kick: false, promote: 2, can_be_kicked: true };
-    let expected2 = Rank { rank_name: 3, can_invite: false, can_kick: true, promote: 3, can_be_kicked: false };
+    let expected0 = Rank {
+        rank_name: 1, can_invite: true, can_kick: true, promote: 1, can_be_kicked: false,
+    };
+    let expected1 = Rank {
+        rank_name: 2, can_invite: true, can_kick: false, promote: 2, can_be_kicked: true,
+    };
+    let expected2 = Rank {
+        rank_name: 3, can_invite: false, can_kick: true, promote: 3, can_be_kicked: false,
+    };
     // Assert all ranks
     assert(*ranks.at(0) == expected0, 'Rank 0 mismatch');
     assert(*ranks.at(1) == expected1, 'Rank 1 mismatch');

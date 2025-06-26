@@ -1,10 +1,10 @@
+use core::array::Array;
 use core::num::traits::{Bounded, Zero};
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
 use starknet::{ContractAddress, get_caller_address};
-use core::array::Array;
 
 #[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
 pub struct Member {

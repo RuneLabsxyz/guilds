@@ -1,5 +1,5 @@
+use guilds::guild::guild_contract::GuildComponent::Rank;
 use starknet::ContractAddress;
-use guilds::guild::guild_contract::GuildComponent::{Rank};
 
 #[starknet::interface]
 pub trait IGuild<TState> {
