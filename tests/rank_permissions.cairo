@@ -1,5 +1,5 @@
 use guilds::guild::guild_contract::GuildComponent;
-use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
+use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl, Rank};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
 use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER};
@@ -11,12 +11,12 @@ use starknet::storage::{
     StoragePointerWriteAccess,
 };
 
+
 type ComponentState = GuildComponent::ComponentState<GuildMock::ContractState>;
 
 fn COMPONENT_STATE() -> ComponentState {
     GuildComponent::component_state_for_testing()
 }
-
 
 #[test]
 #[should_panic(expected: "Only owner can perform this action")]
@@ -73,10 +73,8 @@ fn test_delete_rank() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
     state.create_rank(2, true, false, 2, true);
-    let rank_id = state.rank_count.read() - 1_u8;
 
-    // Only owner can delete rank
-    state.delete_rank(rank_id);
+    state.delete_rank(0);
 }
 
 #[test]
@@ -293,5 +291,36 @@ fn test_member_with_invalid_rank_cannot_kick() {
     // BOB tries to kick CHARLIE
     start_cheat_caller_address(test_address(), BOB);
     state.kick_member(CHARLIE);
+}
+
+#[test]
+fn test_get_rank_permissions() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates two more ranks
+    state.create_rank(2, true, false, 2, true);
+    state.create_rank(3, false, true, 3, false);
+    // Call get_rank_permissions
+    let ranks = state.get_rank_permissions();
+
+    println!("ranks: {}", ranks.len());
+    // There should be 3 ranks
+    assert(ranks.len() == 3, 'Should have 3 ranks');
+    // Expected ranks
+    let expected0 = Rank {
+        rank_name: 1, can_invite: true, can_kick: true, promote: 1, can_be_kicked: false,
+    };
+    let expected1 = Rank {
+        rank_name: 2, can_invite: true, can_kick: false, promote: 2, can_be_kicked: true,
+    };
+    let expected2 = Rank {
+        rank_name: 3, can_invite: false, can_kick: true, promote: 3, can_be_kicked: false,
+    };
+    // Assert all ranks
+    assert(*ranks.at(0) == expected0, 'Rank 0 mismatch');
+    assert(*ranks.at(1) == expected1, 'Rank 1 mismatch');
+    assert(*ranks.at(2) == expected2, 'Rank 2 mismatch');
 }
 

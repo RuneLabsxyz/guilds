@@ -1,3 +1,4 @@
+use core::array::Array;
 use core::num::traits::{Bounded, Zero};
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -63,6 +64,18 @@ pub mod GuildComponent {
             self._create_rank(rank_name, can_invite, can_kick, promote, can_be_kicked);
         }
 
+        fn get_rank_permissions(ref self: ComponentState<TContractState>) -> Array<Rank> {
+            let mut ranks_array = ArrayTrait::new();
+            let rank_count = self.rank_count.read();
+            let mut i = 0_u8;
+            while i != rank_count {
+                let rank = self.ranks.read(i);
+                ranks_array.append(rank);
+                i = i + 1_u8;
+            }
+            ranks_array
+        }
+
         fn delete_rank(ref self: ComponentState<TContractState>, rank_id: u8) {
             self._only_owner();
             self._delete_rank(rank_id);
@@ -112,6 +125,7 @@ pub mod GuildComponent {
             };
             self.ranks.write(0, rank);
             self.members.write(caller, creator);
+            self.rank_count.write(1_u8);
         }
 
         /// Internal: Add a member to the guild

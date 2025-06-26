@@ -1,3 +1,4 @@
+use guilds::guild::guild_contract::GuildComponent::Rank;
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -17,6 +18,8 @@ pub trait IGuild<TState> {
         promote: u8,
         can_be_kicked: bool,
     );
+
+    fn get_rank_permissions(ref self: TState) -> Array<Rank>;
 
     /// Delete a rank by its ID.
     fn delete_rank(ref self: TState, rank_id: u8);
