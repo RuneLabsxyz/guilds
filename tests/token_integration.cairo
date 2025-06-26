@@ -38,17 +38,28 @@ fn test_guild_token_address_matches_erc20() {
 fn test_guildmock_constructor_token_address() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    let token_name: felt252 = 0x54657374546f6b656e; // "TestToken" as hex
-    let token_symbol: felt252 = 0x54544b; // "TTK" as hex
-    let token_supply: felt252 = 10000;
+    let token_name: ByteArray = "TestToken";
+    let token_symbol: ByteArray = "TTK";
+    let token_supply: u256 = 10000;
 
     let deployer = test_address();
     start_cheat_caller_address(deployer, deployer);
 
     let contract = declare("GuildMock").unwrap().contract_class();
+    println!("declared contract deploying....");
+
+    let mut calldata = array![];
+
+    guild_name.serialize(ref calldata);
+    rank_name.serialize(ref calldata);
+    token_name.serialize(ref calldata);
+    token_symbol.serialize(ref calldata);
+    token_supply.serialize(ref calldata);
+
     let (contract_address, _) = contract
-        .deploy(@array![guild_name, rank_name, token_name, token_symbol, token_supply])
+        .deploy(@calldata)
         .unwrap();
+    println!("deployed contract....");
 
     let dispatcher = IGuildMockDispatcher { contract_address };
 }
