@@ -40,7 +40,9 @@ pub mod GuildComponent {
     impl Guild<
         TContractState, +HasComponent<TContractState>,
     > of interface::IGuild<ComponentState<TContractState>> {
-        fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: Option<u8>) {
+        fn invite_member(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: Option<u8>,
+        ) {
             self._only_inviter();
             self._validate_not_member(member);
             let inviter_rank_id = self._get_inviter_rank_id();
@@ -132,7 +134,9 @@ pub mod GuildComponent {
         }
 
         /// Internal: Add a member to the guild with a specific rank
-        fn _add_member_with_rank(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8) {
+        fn _add_member_with_rank(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        ) {
             let new_member = Member { addr: member, rank_id, is_creator: false };
             self.members.write(member, new_member);
         }
@@ -144,7 +148,9 @@ pub mod GuildComponent {
         }
 
         /// Internal: Validate inviter's rank is higher than the invitee's
-        fn _validate_inviter_rank_higher(self: @ComponentState<TContractState>, inviter_rank_id: u8, invitee_rank_id: u8) {
+        fn _validate_inviter_rank_higher(
+            self: @ComponentState<TContractState>, inviter_rank_id: u8, invitee_rank_id: u8,
+        ) {
             assert!(inviter_rank_id < invitee_rank_id, "Can only invite to a lower rank");
         }
 
@@ -249,7 +255,10 @@ pub mod GuildComponent {
             assert!(target_rank.can_be_kicked, "Target member cannot be kicked");
 
             // Prevent kicking same or higher rank (lower rank_id = higher rank)
-            assert!(member.rank_id < target_member.rank_id, "Cannot kick member with same or higher rank");
+            assert!(
+                member.rank_id < target_member.rank_id,
+                "Cannot kick member with same or higher rank",
+            );
         }
 
         /// Internal: Validate that an address is not already a member
@@ -275,7 +284,9 @@ pub mod GuildComponent {
         }
 
         /// Internal: Resolve the target rank id from Option<u8>, defaulting to lowest
-        fn _resolve_target_rank_id(self: @ComponentState<TContractState>, rank_id: Option<u8>) -> u8 {
+        fn _resolve_target_rank_id(
+            self: @ComponentState<TContractState>, rank_id: Option<u8>,
+        ) -> u8 {
             match rank_id {
                 Option::Some(id) => {
                     self._validate_rank_exists(id);

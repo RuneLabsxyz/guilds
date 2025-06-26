@@ -252,7 +252,7 @@ fn test_member_with_invalid_rank_cannot_kick() {
     // Owner invites BOB and assigns him a non-existent rank
     state.create_rank(2, true, false, 2, true);
     state.invite_member(BOB, Option::None);
-    
+
     // Owner invites CHARLIE
     state.create_rank(3, true, false, 2, true);
     state.invite_member(CHARLIE, Option::None);
@@ -300,7 +300,7 @@ fn test_member_cannot_kick_same_rank() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
     // Owner creates a new rank with can_kick true
-    state.create_rank(2, true, true, 2, true);  
+    state.create_rank(2, true, true, 2, true);
     // Owner invites BOB and assigns him the new rank
     state.invite_member(BOB, Option::None);
     // Owner invites CHARLIE and assigns him the same rank
