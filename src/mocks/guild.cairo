@@ -7,16 +7,18 @@ pub trait IGuildMock<TContractState> {
 
 #[starknet::contract]
 pub mod GuildMock {
+    use guilds::erc20::erc20_token::ERC20EquityComponent;
     use guilds::guild::guild_contract::GuildComponent;
     use guilds::guild::guild_contract::GuildComponent::InternalImpl;
-    use openzeppelin_token::erc20::{DefaultConfig, ERC20Component, ERC20HooksEmptyImpl};
+    use openzeppelin_token::erc20::ERC20Component;
     use starknet::get_caller_address;
 
-    // ERC20 Component
-    component!(path: ERC20Component, storage: erc20, event: ERC20Event);
-    impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
+    // ERC20 Base Component (dependency for ERC20EquityComponent)
+    component!(path: ERC20Component, storage: erc20_base, event: ERC20BaseEvent);
+    // ERC20 Equity Component
+    component!(path: ERC20EquityComponent, storage: erc20, event: ERC20Event);
     #[abi(embed_v0)]
-    impl ERC20MixinImpl = ERC20Component::ERC20MixinImpl<ContractState>;
+    impl ERC20EquityImpl = ERC20EquityComponent::ERC20EquityImpl<ContractState>;
 
     // Guild Component
     component!(path: GuildComponent, storage: guild, event: GuildEvent);
@@ -30,7 +32,9 @@ pub mod GuildMock {
         #[substorage(v0)]
         guild: GuildComponent::Storage,
         #[substorage(v0)]
-        erc20: ERC20Component::Storage,
+        erc20: ERC20EquityComponent::Storage,
+        #[substorage(v0)]
+        erc20_base: ERC20Component::Storage,
     }
 
     #[event]
@@ -39,7 +43,9 @@ pub mod GuildMock {
         #[flat]
         GuildEvent: GuildComponent::Event,
         #[flat]
-        ERC20Event: ERC20Component::Event,
+        ERC20Event: ERC20EquityComponent::Event,
+        #[flat]
+        ERC20BaseEvent: ERC20Component::Event,
     }
 
     #[constructor]

@@ -5,7 +5,6 @@ version = 1
 name = "guilds"
 version = "0.1.0"
 dependencies = [
- "openzeppelin_access",
  "openzeppelin_token",
  "snforge_std",
 ]

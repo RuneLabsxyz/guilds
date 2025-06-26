@@ -1,7 +1,7 @@
 use starknet::ContractAddress;
 
 #[starknet::interface]
-trait IERC20Equity<TContractState> {
+pub trait IERC20Equity<TContractState> {
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn initializer(ref self: TContractState, token_name: ByteArray, token_symbol: ByteArray);
 }
@@ -15,12 +15,6 @@ pub mod ERC20EquityComponent {
 
     #[storage]
     pub struct Storage {}
-
-    #[event]
-    #[derive(Drop, Debug, PartialEq, starknet::Event)]
-    pub enum Event {
-        ERC20Event: ERC20Component::Event,
-    }
 
     #[embeddable_as(ERC20EquityImpl)]
     impl ERC20Equity<
