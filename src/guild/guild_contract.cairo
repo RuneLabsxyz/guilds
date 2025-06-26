@@ -40,10 +40,15 @@ pub mod GuildComponent {
     impl Guild<
         TContractState, +HasComponent<TContractState>,
     > of interface::IGuild<ComponentState<TContractState>> {
-        fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+        fn invite_member(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: Option<u8>,
+        ) {
             self._only_inviter();
             self._validate_not_member(member);
-            self._add_member(member);
+            let inviter_rank_id = self._get_inviter_rank_id();
+            let target_rank_id = self._resolve_target_rank_id(rank_id);
+            self._validate_inviter_rank_higher(inviter_rank_id, target_rank_id);
+            self._add_member_with_rank(member, target_rank_id);
         }
 
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
@@ -128,11 +133,31 @@ pub mod GuildComponent {
             self.rank_count.write(1_u8);
         }
 
-        /// Internal: Add a member to the guild
-        fn _add_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
-            let rank_id = self.rank_count.read();
+        /// Internal: Add a member to the guild with a specific rank
+        fn _add_member_with_rank(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        ) {
             let new_member = Member { addr: member, rank_id, is_creator: false };
             self.members.write(member, new_member);
+        }
+
+        /// Internal: Validate that a rank exists
+        fn _validate_rank_exists(self: @ComponentState<TContractState>, rank_id: u8) {
+            let rank = self.ranks.read(rank_id);
+            assert!(rank.rank_name != 0, "Rank does not exist");
+        }
+
+        /// Internal: Validate inviter's rank is higher than the invitee's
+        fn _validate_inviter_rank_higher(
+            self: @ComponentState<TContractState>, inviter_rank_id: u8, invitee_rank_id: u8,
+        ) {
+            assert!(inviter_rank_id < invitee_rank_id, "Can only invite to a lower rank");
+        }
+
+        /// Internal: Add a member to the guild (default to lowest rank, for backward compatibility)
+        fn _add_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+            let rank_id = self.rank_count.read() - 1;
+            self._add_member_with_rank(member, rank_id);
         }
 
         /// Internal: Remove a member from the guild
@@ -210,7 +235,6 @@ pub mod GuildComponent {
             assert!(rank.can_invite, "Caller does not have permission to invite");
         }
 
-
         fn _only_kicker(ref self: ComponentState<TContractState>, target: ContractAddress) {
             let caller = get_caller_address();
 
@@ -226,10 +250,16 @@ pub mod GuildComponent {
             let rank = self.ranks.read(member.rank_id);
             assert!(rank.can_kick, "Caller does not have permission to kick");
 
-            let target_rank = self.ranks.read(self.members.read(target).rank_id);
+            let target_member = self.members.read(target);
+            let target_rank = self.ranks.read(target_member.rank_id);
             assert!(target_rank.can_be_kicked, "Target member cannot be kicked");
-        }
 
+            // Prevent kicking same or higher rank (lower rank_id = higher rank)
+            assert!(
+                member.rank_id < target_member.rank_id,
+                "Cannot kick member with same or higher rank",
+            );
+        }
 
         /// Internal: Validate that an address is not already a member
         fn _validate_not_member(self: @ComponentState<TContractState>, member: ContractAddress) {
@@ -240,6 +270,30 @@ pub mod GuildComponent {
         fn _validate_member(self: @ComponentState<TContractState>, member: ContractAddress) {
             let member = self.members.read(member);
             assert!(member.addr != Zero::zero(), "Target member does not exist in the guild");
+        }
+
+        /// Internal: Get the inviter's rank id (owner is always rank 0)
+        fn _get_inviter_rank_id(self: @ComponentState<TContractState>) -> u8 {
+            let inviter = get_caller_address();
+            if inviter == self.owner.read() {
+                0_u8
+            } else {
+                let inviter_member = self.members.read(inviter);
+                inviter_member.rank_id
+            }
+        }
+
+        /// Internal: Resolve the target rank id from Option<u8>, defaulting to lowest
+        fn _resolve_target_rank_id(
+            self: @ComponentState<TContractState>, rank_id: Option<u8>,
+        ) -> u8 {
+            match rank_id {
+                Option::Some(id) => {
+                    self._validate_rank_exists(id);
+                    id
+                },
+                Option::None => self.rank_count.read() - 1_u8,
+            }
         }
     }
 }
