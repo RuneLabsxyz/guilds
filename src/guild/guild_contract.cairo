@@ -43,16 +43,8 @@ pub mod GuildComponent {
         fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: Option<u8>) {
             self._only_inviter();
             self._validate_not_member(member);
-            let inviter = get_caller_address();
-            let inviter_member = self.members.read(inviter);
-            let inviter_rank_id = if inviter == self.owner.read() { 0_u8 } else { inviter_member.rank_id };
-            let target_rank_id = match rank_id {
-                Option::Some(id) => {
-                    self._validate_rank_exists(id);
-                    id
-                },
-                Option::None => self.rank_count.read() - 1_u8,
-            };
+            let inviter_rank_id = self._get_inviter_rank_id();
+            let target_rank_id = self._resolve_target_rank_id(rank_id);
             self._validate_inviter_rank_higher(inviter_rank_id, target_rank_id);
             self._add_member_with_rank(member, target_rank_id);
         }
@@ -269,6 +261,28 @@ pub mod GuildComponent {
         fn _validate_member(self: @ComponentState<TContractState>, member: ContractAddress) {
             let member = self.members.read(member);
             assert!(member.addr != Zero::zero(), "Target member does not exist in the guild");
+        }
+
+        /// Internal: Get the inviter's rank id (owner is always rank 0)
+        fn _get_inviter_rank_id(self: @ComponentState<TContractState>) -> u8 {
+            let inviter = get_caller_address();
+            if inviter == self.owner.read() {
+                0_u8
+            } else {
+                let inviter_member = self.members.read(inviter);
+                inviter_member.rank_id
+            }
+        }
+
+        /// Internal: Resolve the target rank id from Option<u8>, defaulting to lowest
+        fn _resolve_target_rank_id(self: @ComponentState<TContractState>, rank_id: Option<u8>) -> u8 {
+            match rank_id {
+                Option::Some(id) => {
+                    self._validate_rank_exists(id);
+                    id
+                },
+                Option::None => self.rank_count.read() - 1_u8,
+            }
         }
     }
 }
