@@ -56,9 +56,7 @@ fn test_guildmock_constructor_token_address() {
     token_symbol.serialize(ref calldata);
     token_supply.serialize(ref calldata);
 
-    let (contract_address, _) = contract
-        .deploy(@calldata)
-        .unwrap();
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
     println!("deployed contract....");
 
     let dispatcher = IGuildMockDispatcher { contract_address };

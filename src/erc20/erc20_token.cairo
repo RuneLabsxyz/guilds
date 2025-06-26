@@ -1,37 +1,50 @@
-#[starknet::contract]
-mod MyERC20Token {
+use starknet::ContractAddress;
+
+#[starknet::interface]
+trait IERC20Equity<TContractState> {
+    fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
+    fn initializer(ref self: TContractState, token_name: ByteArray, token_symbol: ByteArray);
+}
+
+
+#[starknet::component]
+pub mod ERC20EquityComponent {
+    use openzeppelin_token::erc20::ERC20Component::InternalImpl as ERC20Internal;
     use openzeppelin_token::erc20::{DefaultConfig, ERC20Component, ERC20HooksEmptyImpl};
     use starknet::ContractAddress;
 
-    component!(path: ERC20Component, storage: erc20, event: ERC20Event);
-
-    // ERC20 Mixin
-    #[abi(embed_v0)]
-    impl ERC20MixinImpl = ERC20Component::ERC20MixinImpl<ContractState>;
-    impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
-
     #[storage]
-    struct Storage {
-        #[substorage(v0)]
-        erc20: ERC20Component::Storage,
-    }
+    pub struct Storage {}
 
     #[event]
-    #[derive(Drop, starknet::Event)]
-    enum Event {
-        #[flat]
+    #[derive(Drop, Debug, PartialEq, starknet::Event)]
+    pub enum Event {
         ERC20Event: ERC20Component::Event,
     }
 
-    #[constructor]
-    fn constructor(
-        ref self: ContractState,
-        name: ByteArray,
-        symbol: ByteArray,
-        fixed_supply: u256,
-        recipient: ContractAddress,
-    ) {
-        self.erc20.initializer(name, symbol);
-        self.erc20.mint(recipient, fixed_supply);
+    #[embeddable_as(ERC20EquityImpl)]
+    impl ERC20Equity<
+        TContractState,
+        +HasComponent<TContractState>,
+        +Drop<TContractState>,
+        impl Token: ERC20Component::HasComponent<TContractState>,
+    > of super::IERC20Equity<ComponentState<TContractState>> {
+        /// Lightweight initializer for name and symbol
+        fn initializer(
+            ref self: ComponentState<TContractState>,
+            token_name: ByteArray,
+            token_symbol: ByteArray,
+        ) {
+            let mut erc20 = get_dep_component_mut!(ref self, Token);
+            erc20.initializer(token_name, token_symbol);
+        }
+
+        /// Forward mint call to the ERC20 internal implementation
+        fn mint(
+            ref self: ComponentState<TContractState>, recipient: ContractAddress, amount: u256,
+        ) {
+            let mut erc20 = get_dep_component_mut!(ref self, Token);
+            erc20.mint(recipient, amount);
+        }
     }
 }
