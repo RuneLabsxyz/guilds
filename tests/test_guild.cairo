@@ -39,7 +39,8 @@ fn test_guild_invite() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
 
-    state.invite_member(ALICE);
+    state.create_rank(2, true, true, 2, true);
+    state.invite_member(ALICE, Option::None);
 }
 
 #[test]
@@ -52,7 +53,7 @@ fn test_guild_invite_nonowner() {
 
     start_cheat_caller_address(test_address(), BOB);
 
-    state.invite_member(ALICE);
+    state.invite_member(ALICE, Option::None);
 }
 
 
@@ -63,10 +64,11 @@ fn test_guild_double_invite() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
+    state.create_rank(2, true, true, 2, true);
 
-    state.invite_member(ALICE);
+    state.invite_member(ALICE, Option::None);
 
-    state.invite_member(ALICE);
+    state.invite_member(ALICE, Option::None);
 }
 
 
@@ -80,10 +82,7 @@ fn test_guild_kick() {
     state.create_rank(2, true, true, 2, true);
     let rank_id = state.rank_count.read() - 1_u8;
     // Invite ALICE and assign her the kickable rank
-    state.invite_member(ALICE);
-    let mut alice_member = state.members.read(ALICE);
-    alice_member.rank_id = rank_id;
-    state.members.write(ALICE, alice_member);
+    state.invite_member(ALICE, Option::Some(rank_id));
     state.kick_member(ALICE);
 }
 
@@ -109,10 +108,7 @@ fn test_guild_double_kick() {
     state.create_rank(2, true, true, 2, true);
     let rank_id = state.rank_count.read() - 1_u8;
     // Invite BOB and assign him the kickable rank
-    state.invite_member(BOB);
-    let mut bob_member = state.members.read(BOB);
-    bob_member.rank_id = rank_id;
-    state.members.write(BOB, bob_member);
+    state.invite_member(BOB, Option::Some(rank_id));
     // First kick should succeed
     state.kick_member(BOB);
     // Second kick should fail with "Member does not exist in the guild"

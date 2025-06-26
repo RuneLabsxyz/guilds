@@ -3,8 +3,8 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IGuild<TState> {
-    /// Invite a new member with a starting rank.
-    fn invite_member(ref self: TState, member: ContractAddress);
+    /// Invite a new member with a starting rank. If rank_id is None, defaults to the lowest rank.
+    fn invite_member(ref self: TState, member: ContractAddress, rank_id: Option<u8>);
 
     /// Kick a member from the guild.
     fn kick_member(ref self: TState, member: ContractAddress);

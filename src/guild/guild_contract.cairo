@@ -40,10 +40,21 @@ pub mod GuildComponent {
     impl Guild<
         TContractState, +HasComponent<TContractState>,
     > of interface::IGuild<ComponentState<TContractState>> {
-        fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+        fn invite_member(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: Option<u8>) {
             self._only_inviter();
             self._validate_not_member(member);
-            self._add_member(member);
+            let inviter = get_caller_address();
+            let inviter_member = self.members.read(inviter);
+            let inviter_rank_id = if inviter == self.owner.read() { 0_u8 } else { inviter_member.rank_id };
+            let target_rank_id = match rank_id {
+                Option::Some(id) => {
+                    self._validate_rank_exists(id);
+                    id
+                },
+                Option::None => self.rank_count.read() - 1_u8,
+            };
+            self._validate_inviter_rank_higher(inviter_rank_id, target_rank_id);
+            self._add_member_with_rank(member, target_rank_id);
         }
 
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
@@ -128,11 +139,27 @@ pub mod GuildComponent {
             self.rank_count.write(1_u8);
         }
 
-        /// Internal: Add a member to the guild
-        fn _add_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
-            let rank_id = self.rank_count.read() - 1;
+        /// Internal: Add a member to the guild with a specific rank
+        fn _add_member_with_rank(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8) {
             let new_member = Member { addr: member, rank_id, is_creator: false };
             self.members.write(member, new_member);
+        }
+
+        /// Internal: Validate that a rank exists
+        fn _validate_rank_exists(self: @ComponentState<TContractState>, rank_id: u8) {
+            let rank = self.ranks.read(rank_id);
+            assert!(rank.rank_name != 0, "Rank does not exist");
+        }
+
+        /// Internal: Validate inviter's rank is higher than the invitee's
+        fn _validate_inviter_rank_higher(self: @ComponentState<TContractState>, inviter_rank_id: u8, invitee_rank_id: u8) {
+            assert!(inviter_rank_id < invitee_rank_id, "Can only invite to a lower rank");
+        }
+
+        /// Internal: Add a member to the guild (default to lowest rank, for backward compatibility)
+        fn _add_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+            let rank_id = self.rank_count.read() - 1;
+            self._add_member_with_rank(member, rank_id);
         }
 
         /// Internal: Remove a member from the guild
