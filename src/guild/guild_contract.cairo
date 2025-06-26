@@ -34,6 +34,7 @@ pub mod GuildComponent {
         pub members: Map<ContractAddress, Member>,
         pub ranks: Map<u8, Rank>,
         pub rank_count: u8,
+        pub pending_invites: Map<ContractAddress, u8>,
     }
 
     #[embeddable_as(GuildImpl)]
@@ -48,7 +49,7 @@ pub mod GuildComponent {
             let inviter_rank_id = self._get_inviter_rank_id();
             let target_rank_id = self._resolve_target_rank_id(rank_id);
             self._validate_inviter_rank_higher(inviter_rank_id, target_rank_id);
-            self._add_member_with_rank(member, target_rank_id);
+            self._add_pending_invite(member, target_rank_id);
         }
 
         fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
@@ -96,6 +97,15 @@ pub mod GuildComponent {
         ) {
             self._only_owner();
             self._change_rank_permissions(rank_id, can_invite, can_kick, promote, can_be_kicked);
+        }
+
+        /// Accept an invite to join the guild (must be called by the invited address)
+        fn accept_invite(ref self: ComponentState<TContractState>) {
+            let caller = get_caller_address();
+            self._validate_pending_invite(caller);
+            let rank_id = self.pending_invites.read(caller);
+            self._add_member_with_rank(caller, rank_id);
+            self._clear_pending_invite(caller);
         }
     }
 
@@ -294,6 +304,22 @@ pub mod GuildComponent {
                 },
                 Option::None => self.rank_count.read() - 1_u8,
             }
+        }
+
+        /// Internal: Add a pending invite
+        fn _add_pending_invite(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8) {
+            self.pending_invites.write(member, rank_id);
+        }
+
+        /// Internal: Validate that an address has a pending invite
+        fn _validate_pending_invite(self: @ComponentState<TContractState>, member: ContractAddress) {
+            let rank_id = self.pending_invites.read(member);
+            assert!(rank_id != 0_u8 || self.rank_count.read() == 1_u8, "No pending invite for this address");
+        }
+
+        /// Internal: Clear a pending invite
+        fn _clear_pending_invite(ref self: ComponentState<TContractState>, member: ContractAddress) {
+            self.pending_invites.write(member, 0_u8);
         }
     }
 }

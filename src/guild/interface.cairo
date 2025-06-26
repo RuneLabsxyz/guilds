@@ -33,6 +33,9 @@ pub trait IGuild<TState> {
         promote: u8,
         can_be_kicked: bool,
     );
+
+    /// Accept an invite to join the guild (must be called by the invited address)
+    fn accept_invite(ref self: TState);
 }
 
 #[starknet::interface]

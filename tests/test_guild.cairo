@@ -41,6 +41,8 @@ fn test_guild_invite() {
 
     state.create_rank(2, true, true, 2, true);
     state.invite_member(ALICE, Option::None);
+    start_cheat_caller_address(test_address(), ALICE);
+    state.accept_invite();
 }
 
 #[test]
@@ -63,11 +65,15 @@ fn test_guild_double_invite() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     state.create_rank(2, true, true, 2, true);
 
     state.invite_member(ALICE, Option::None);
+    start_cheat_caller_address(test_address(), ALICE);
+    state.accept_invite();
 
+    start_cheat_caller_address(test_address(), OWNER);
     state.invite_member(ALICE, Option::None);
 }
 
@@ -77,12 +83,17 @@ fn test_guild_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
+
     state.initializer(guild_name, rank_name);
     // Create a kickable rank
     state.create_rank(2, true, true, 2, true);
     let rank_id = state.rank_count.read() - 1_u8;
     // Invite ALICE and assign her the kickable rank
     state.invite_member(ALICE, Option::Some(rank_id));
+    start_cheat_caller_address(test_address(), ALICE);
+    state.accept_invite();
+    start_cheat_caller_address(test_address(), OWNER);
     state.kick_member(ALICE);
 }
 
