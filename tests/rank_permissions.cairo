@@ -73,7 +73,7 @@ fn test_delete_rank() {
     let rank_name: felt252 = 1;
     state.initializer(guild_name, rank_name);
     state.create_rank(2, true, false, 2, true);
-
+    // Try to delete the creator's rank (should panic)
     state.delete_rank(0);
 }
 
@@ -104,19 +104,15 @@ fn test_member_with_permission_can_invite_and_kick() {
     state.initializer(guild_name, rank_name);
     // Owner creates a new rank with can_invite and can_kick true
     state.create_rank(2, true, true, 2, true);
-    let rank_id = state.rank_count.read() - 1_u8;
-    // Owner invites BOB and assigns him the new rank
+
     state.invite_member(BOB);
-    let mut bob_member = state.members.read(BOB);
-    bob_member.rank_id = rank_id;
-    state.members.write(BOB, bob_member);
-    // BOB invites CHARLIE
+
+    // Owner creates a worst rank with no permissions
+    state.create_rank(3, false, false, 3, true);
+
     start_cheat_caller_address(test_address(), BOB);
+    // BOB invites CHARLIE
     state.invite_member(CHARLIE);
-    // Set CHARLIE's rank to the kickable rank
-    let mut charlie_member = state.members.read(CHARLIE);
-    charlie_member.rank_id = rank_id;
-    state.members.write(CHARLIE, charlie_member);
     // BOB kicks CHARLIE
     state.kick_member(CHARLIE);
 }
@@ -322,5 +318,51 @@ fn test_get_rank_permissions() {
     assert(*ranks.at(0) == expected0, 'Rank 0 mismatch');
     assert(*ranks.at(1) == expected1, 'Rank 1 mismatch');
     assert(*ranks.at(2) == expected2, 'Rank 2 mismatch');
+}
+
+#[test]
+#[should_panic(expected: "Cannot kick member with same or higher rank")]
+fn test_member_cannot_kick_same_rank() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    // Owner creates a new rank with can_kick true
+    state.create_rank(2, true, true, 2, true);
+    let rank_id = state.rank_count.read() - 1_u8;
+    // Owner invites BOB and assigns him the new rank
+    state.invite_member(BOB);
+    let mut bob_member = state.members.read(BOB);
+    bob_member.rank_id = rank_id;
+    state.members.write(BOB, bob_member);
+    // Owner invites CHARLIE and assigns him the same rank
+    state.invite_member(CHARLIE);
+    let mut charlie_member = state.members.read(CHARLIE);
+    charlie_member.rank_id = rank_id;
+    state.members.write(CHARLIE, charlie_member);
+    // BOB tries to kick CHARLIE (same rank)
+    start_cheat_caller_address(test_address(), BOB);
+    state.kick_member(CHARLIE);
+}
+
+#[test]
+#[should_panic(expected: "Cannot kick member with same or higher rank")]
+fn test_member_cannot_kick_higher_rank() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
+    state.initializer(guild_name, rank_name);
+    // Owner creates a new rank with can_kick true
+    state.create_rank(2, true, true, 2, true);
+    // Owner invites BOB and assigns him the lower rank
+    state.invite_member(BOB);
+    // Owner creates a new rank with can_kick true
+    state.create_rank(3, true, true, 3, true);
+
+    state.invite_member(CHARLIE);
+
+    start_cheat_caller_address(test_address(), CHARLIE);
+    state.kick_member(BOB);
 }
 

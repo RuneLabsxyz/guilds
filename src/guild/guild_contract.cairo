@@ -130,7 +130,7 @@ pub mod GuildComponent {
 
         /// Internal: Add a member to the guild
         fn _add_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
-            let rank_id = self.rank_count.read();
+            let rank_id = self.rank_count.read() - 1;
             let new_member = Member { addr: member, rank_id, is_creator: false };
             self.members.write(member, new_member);
         }
@@ -210,7 +210,6 @@ pub mod GuildComponent {
             assert!(rank.can_invite, "Caller does not have permission to invite");
         }
 
-
         fn _only_kicker(ref self: ComponentState<TContractState>, target: ContractAddress) {
             let caller = get_caller_address();
 
@@ -226,10 +225,13 @@ pub mod GuildComponent {
             let rank = self.ranks.read(member.rank_id);
             assert!(rank.can_kick, "Caller does not have permission to kick");
 
-            let target_rank = self.ranks.read(self.members.read(target).rank_id);
+            let target_member = self.members.read(target);
+            let target_rank = self.ranks.read(target_member.rank_id);
             assert!(target_rank.can_be_kicked, "Target member cannot be kicked");
-        }
 
+            // Prevent kicking same or higher rank (lower rank_id = higher rank)
+            assert!(member.rank_id < target_member.rank_id, "Cannot kick member with same or higher rank");
+        }
 
         /// Internal: Validate that an address is not already a member
         fn _validate_not_member(self: @ComponentState<TContractState>, member: ContractAddress) {
