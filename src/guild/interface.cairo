@@ -19,7 +19,6 @@ pub trait IGuild<TState> {
         can_be_kicked: bool,
     );
 
-    fn get_rank_permissions(ref self: TState) -> Array<Rank>;
 
     fn promote_member(ref self: TState, member: ContractAddress, rank_id: u8);
 
@@ -50,5 +49,7 @@ pub trait IGuildMetadata<TState> {
 
     /// Check the number of ranks in the guild.
     fn max_rank(self: @TState) -> u8;
+
+    fn get_rank_permissions(ref self: TState) -> Array<Rank>;
 }
 

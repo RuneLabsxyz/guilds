@@ -70,18 +70,6 @@ pub mod GuildComponent {
             self._create_rank(rank_name, can_invite, can_kick, promote, can_be_kicked);
         }
 
-        fn get_rank_permissions(ref self: ComponentState<TContractState>) -> Array<Rank> {
-            let mut ranks_array = ArrayTrait::new();
-            let rank_count = self.rank_count.read();
-            let mut i = 0_u8;
-            while i != rank_count {
-                let rank = self.ranks.read(i);
-                ranks_array.append(rank);
-                i = i + 1_u8;
-            }
-            ranks_array
-        }
-
         fn delete_rank(ref self: ComponentState<TContractState>, rank_id: u8) {
             self._only_owner();
             self._delete_rank(rank_id);
@@ -108,7 +96,9 @@ pub mod GuildComponent {
             self._clear_pending_invite(caller);
         }
 
-        fn promote_member(ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8) {
+        fn promote_member(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        ) {
             let caller = get_caller_address();
             let caller_rank_id = self._get_member_rank_id();
             self._validate_member(caller);
@@ -132,6 +122,18 @@ pub mod GuildComponent {
 
         fn max_rank(self: @ComponentState<TContractState>) -> u8 {
             self.rank_count.read()
+        }
+
+        fn get_rank_permissions(ref self: ComponentState<TContractState>) -> Array<Rank> {
+            let mut ranks_array = ArrayTrait::new();
+            let rank_count = self.rank_count.read();
+            let mut i = 0_u8;
+            while i != rank_count {
+                let rank = self.ranks.read(i);
+                ranks_array.append(rank);
+                i = i + 1_u8;
+            }
+            ranks_array
         }
     }
 
