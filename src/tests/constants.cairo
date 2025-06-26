@@ -23,6 +23,7 @@ pub const VOTES_TOKEN: ContractAddress = 'VOTES_TOKEN'.as_address();
 pub const ALICE: ContractAddress = 'ALICE'.as_address();
 pub const BOB: ContractAddress = 'BOB'.as_address();
 pub const CHARLIE: ContractAddress = 'CHARLIE'.as_address();
+pub const TOKEN_ADDRESS: ContractAddress = 'TOKEN_ADDRESS'.as_address();
 
 pub const CLASS_HASH_ZERO: ClassHash = 0.try_into().unwrap();
 
