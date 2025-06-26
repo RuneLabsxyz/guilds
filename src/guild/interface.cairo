@@ -21,6 +21,8 @@ pub trait IGuild<TState> {
 
     fn get_rank_permissions(ref self: TState) -> Array<Rank>;
 
+    fn promote_member(ref self: TState, member: ContractAddress, rank_id: u8);
+
     /// Delete a rank by its ID.
     fn delete_rank(ref self: TState, rank_id: u8);
 

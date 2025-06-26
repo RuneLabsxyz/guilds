@@ -127,3 +127,73 @@ fn test_guild_double_kick() {
     state.kick_member(BOB);
 }
 
+#[test]
+fn test_promote_member_success() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
+    state.initializer(guild_name, rank_name);
+    // Create two more ranks
+    state.create_rank(2, true, true, 2, true);
+    state.create_rank(3, true, true, 3, true);
+    // Invite ALICE and assign her the lowest rank
+    let lowest_rank = state.rank_count.read() - 1_u8;
+    state.invite_member(ALICE, Option::Some(lowest_rank));
+    start_cheat_caller_address(test_address(), ALICE);
+    state.accept_invite();
+    // Promote ALICE to rank 1 (higher than lowest)
+    start_cheat_caller_address(test_address(), OWNER);
+    state.promote_member(ALICE, 1_u8);
+    let member = state.members.read(ALICE);
+    assert(member.rank_id == 1_u8, 'Success');
+}
+
+#[test]
+#[should_panic(expected: "Can only promote to a lower rank")]
+fn test_promote_member_to_higher_or_same_rank_should_fail() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
+    state.initializer(guild_name, rank_name);
+    state.create_rank(2, true, true, 2, true);
+    // Invite ALICE and assign her the lowest rank
+    let lowest_rank = state.rank_count.read() - 1_u8;
+    state.invite_member(ALICE, Option::Some(lowest_rank));
+    start_cheat_caller_address(test_address(), ALICE);
+    state.accept_invite();
+    // ALICE tries to promote herself to the same rank (should fail)
+    state.promote_member(ALICE, lowest_rank);
+}
+
+#[test]
+#[should_panic(expected: "Target member does not exist in the guild")]
+fn test_promote_non_member_should_fail() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
+    state.initializer(guild_name, rank_name);
+    // Try to promote BOB who is not a member
+    state.promote_member(BOB, 1_u8);
+}
+
+#[test]
+#[should_panic(expected: "Target member does not exist in the guild")]
+fn test_non_member_cannot_promote() {
+    let mut state = COMPONENT_STATE();
+    let guild_name: felt252 = 1234;
+    let rank_name: felt252 = 1;
+    state.initializer(guild_name, rank_name);
+    state.create_rank(2, true, true, 2, true);
+    // Invite ALICE and assign her the lowest rank
+    let lowest_rank = state.rank_count.read() - 1_u8;
+    state.invite_member(ALICE, Option::Some(lowest_rank));
+    start_cheat_caller_address(test_address(), ALICE);
+    state.accept_invite();
+    // BOB (not a member) tries to promote ALICE
+    start_cheat_caller_address(test_address(), BOB);
+    state.promote_member(ALICE, 1_u8);
+}
+
