@@ -82,12 +82,18 @@ fn test_owner_can_invite_and_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     // Owner creates a kickable rank
     state.create_rank(2, true, true, 2, true);
     // Owner invites BOB
+
     state.invite_member(BOB, Option::None);
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
+
     // Owner kicks BOB
+    start_cheat_caller_address(test_address(), OWNER);
     state.kick_member(BOB);
 }
 
@@ -96,19 +102,25 @@ fn test_member_with_permission_can_invite_and_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     // Owner creates a new rank with can_invite and can_kick true
     state.create_rank(2, true, true, 2, true);
 
     state.invite_member(BOB, Option::None);
-
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
     // Owner creates a worst rank with no permissions
+    start_cheat_caller_address(test_address(), OWNER);
     state.create_rank(3, false, false, 3, true);
 
-    start_cheat_caller_address(test_address(), BOB);
     // BOB invites CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
     state.invite_member(CHARLIE, Option::None);
+    start_cheat_caller_address(test_address(), CHARLIE);
+    state.accept_invite();
     // BOB kicks CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
     state.kick_member(CHARLIE);
 }
 
@@ -125,6 +137,7 @@ fn test_member_without_invite_permission_cannot_invite() {
     state.invite_member(BOB, Option::None);
     // BOB tries to invite CHARLIE
     start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
     state.invite_member(CHARLIE, Option::None);
 }
 
@@ -134,13 +147,21 @@ fn test_member_without_kick_permission_cannot_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     // Owner creates a new rank with can_kick false
     state.create_rank(2, true, false, 2, true);
     // Owner invites BOB and assigns him the new rank
+
     state.invite_member(BOB, Option::None);
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
     // Owner invites CHARLIE
+    start_cheat_caller_address(test_address(), OWNER);
+
     state.invite_member(CHARLIE, Option::None);
+    start_cheat_caller_address(test_address(), CHARLIE);
+    state.accept_invite();
     // BOB tries to kick CHARLIE
     start_cheat_caller_address(test_address(), BOB);
     state.kick_member(CHARLIE);
@@ -152,14 +173,22 @@ fn test_cannot_kick_member_with_cannot_be_kicked_rank() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     // Owner creates a new rank with can_be_kicked false
     state.create_rank(2, true, true, 2, false);
     // Owner invites BOB and assigns him the new rank
     state.invite_member(BOB, Option::None);
-    // Owner invites CHARLIE
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
+    // BOB invites CHARLIE
+    start_cheat_caller_address(test_address(), OWNER);
+    state.create_rank(3, true, true, 3, false);
     state.invite_member(CHARLIE, Option::None);
-    // Assign CHARLIE the cannot_be_kicked rank
+    start_cheat_caller_address(test_address(), CHARLIE);
+
+    state.accept_invite();
+
     // BOB tries to kick CHARLIE
     start_cheat_caller_address(test_address(), BOB);
     state.kick_member(CHARLIE);
@@ -203,8 +232,9 @@ fn test_member_cannot_invite_self() {
     state.create_rank(2, true, true, 2, true);
     // Owner invites BOB and assigns him the new rank
     state.invite_member(BOB, Option::None);
-    // BOB tries to invite himself
     start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
+    // BOB tries to invite himself
     state.invite_member(BOB, Option::None);
 }
 
@@ -219,8 +249,9 @@ fn test_member_cannot_kick_self() {
     state.create_rank(2, true, true, 2, false);
     // Owner invites BOB and assigns him the new rank
     state.invite_member(BOB, Option::None);
-    // BOB tries to kick himself
     start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
+    // BOB tries to kick himself
     state.kick_member(BOB);
 }
 
@@ -239,6 +270,7 @@ fn test_member_with_invalid_rank_cannot_invite() {
 
     // BOB tries to invite CHARLIE
     start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
     state.invite_member(CHARLIE, Option::None);
 }
 
@@ -248,15 +280,23 @@ fn test_member_with_invalid_rank_cannot_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     // Owner invites BOB and assigns him a non-existent rank
     state.create_rank(2, true, false, 2, true);
     state.invite_member(BOB, Option::None);
 
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
+
     // Owner invites CHARLIE
+    start_cheat_caller_address(test_address(), OWNER);
     state.create_rank(3, true, false, 2, true);
     state.invite_member(CHARLIE, Option::None);
     // BOB tries to kick CHARLIE
+    start_cheat_caller_address(test_address(), CHARLIE);
+    state.accept_invite();
+
     start_cheat_caller_address(test_address(), BOB);
     state.kick_member(CHARLIE);
 }
@@ -298,13 +338,21 @@ fn test_member_cannot_kick_same_rank() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
+    start_cheat_caller_address(test_address(), OWNER);
     state.initializer(guild_name, rank_name);
     // Owner creates a new rank with can_kick true
     state.create_rank(2, true, true, 2, true);
     // Owner invites BOB and assigns him the new rank
+
     state.invite_member(BOB, Option::None);
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
     // Owner invites CHARLIE and assigns him the same rank
+
+    start_cheat_caller_address(test_address(), OWNER);
     state.invite_member(CHARLIE, Option::None);
+    start_cheat_caller_address(test_address(), CHARLIE);
+    state.accept_invite();
     // BOB tries to kick CHARLIE (same rank)
     start_cheat_caller_address(test_address(), BOB);
     state.kick_member(CHARLIE);
@@ -321,13 +369,18 @@ fn test_member_cannot_kick_higher_rank() {
     // Owner creates a new rank with can_kick true
     state.create_rank(2, true, true, 2, true);
     // Owner invites BOB and assigns him the lower rank
+
     state.invite_member(BOB, Option::None);
+    start_cheat_caller_address(test_address(), BOB);
+    state.accept_invite();
     // Owner creates a new rank with can_kick true
+    start_cheat_caller_address(test_address(), OWNER);
     state.create_rank(3, true, true, 3, true);
 
     state.invite_member(CHARLIE, Option::None);
-
     start_cheat_caller_address(test_address(), CHARLIE);
+    state.accept_invite();
+
     state.kick_member(BOB);
 }
 
