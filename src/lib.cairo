@@ -15,6 +15,6 @@ pub mod erc20 {
     pub mod erc20_token;
 }
 
-pub mod equity {
-    pub mod equity_token;
+pub mod gov {
+    pub mod governance;
 }
