@@ -60,7 +60,7 @@ pub mod GuildMock {
         let creator = get_caller_address();
 
         // Initialize ERC20 token
-        self.erc20.initializer(token_name, token_symbol);
+        self.erc20.initializer(token_name, token_symbol, starknet::get_contract_address());
         self.erc20.mint(creator, token_supply);
 
         // Save the token address in the guild
