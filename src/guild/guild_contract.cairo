@@ -46,9 +46,9 @@ pub mod GuildComponent {
         ) {
             self._only_inviter();
             self._validate_not_member(member);
-            let inviter_rank_id = self._get_inviter_rank_id();
+            let inviter_rank_id = self._get_member_rank_id();
             let target_rank_id = self._resolve_target_rank_id(rank_id);
-            self._validate_inviter_rank_higher(inviter_rank_id, target_rank_id);
+            self._validate_rank_higher(inviter_rank_id, target_rank_id);
             self._add_pending_invite(member, target_rank_id);
         }
 
@@ -68,18 +68,6 @@ pub mod GuildComponent {
         ) {
             self._only_owner();
             self._create_rank(rank_name, can_invite, can_kick, promote, can_be_kicked);
-        }
-
-        fn get_rank_permissions(ref self: ComponentState<TContractState>) -> Array<Rank> {
-            let mut ranks_array = ArrayTrait::new();
-            let rank_count = self.rank_count.read();
-            let mut i = 0_u8;
-            while i != rank_count {
-                let rank = self.ranks.read(i);
-                ranks_array.append(rank);
-                i = i + 1_u8;
-            }
-            ranks_array
         }
 
         fn delete_rank(ref self: ComponentState<TContractState>, rank_id: u8) {
@@ -107,6 +95,17 @@ pub mod GuildComponent {
             self._add_member_with_rank(caller, rank_id);
             self._clear_pending_invite(caller);
         }
+
+        fn promote_member(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        ) {
+            let caller = get_caller_address();
+            let caller_rank_id = self._get_member_rank_id();
+            self._validate_member(caller);
+            self._validate_member(member);
+            self._validate_rank_higher(caller_rank_id, rank_id);
+            self._promote_member(member, rank_id);
+        }
     }
 
     #[embeddable_as(GuildMetadataImpl)]
@@ -123,6 +122,18 @@ pub mod GuildComponent {
 
         fn max_rank(self: @ComponentState<TContractState>) -> u8 {
             self.rank_count.read()
+        }
+
+        fn get_rank_permissions(ref self: ComponentState<TContractState>) -> Array<Rank> {
+            let mut ranks_array = ArrayTrait::new();
+            let rank_count = self.rank_count.read();
+            let mut i = 0_u8;
+            while i != rank_count {
+                let rank = self.ranks.read(i);
+                ranks_array.append(rank);
+                i = i + 1_u8;
+            }
+            ranks_array
         }
     }
 
@@ -157,11 +168,11 @@ pub mod GuildComponent {
             assert!(rank.rank_name != 0, "Rank does not exist");
         }
 
-        /// Internal: Validate inviter's rank is higher than the invitee's
-        fn _validate_inviter_rank_higher(
-            self: @ComponentState<TContractState>, inviter_rank_id: u8, invitee_rank_id: u8,
+        /// Internal: Validate member's rank is higher than the target's
+        fn _validate_rank_higher(
+            self: @ComponentState<TContractState>, member_rank_id: u8, target_rank_id: u8,
         ) {
-            assert!(inviter_rank_id < invitee_rank_id, "Can only invite to a lower rank");
+            assert!(member_rank_id < target_rank_id, "Can only promote to a lower rank");
         }
 
         /// Internal: Add a member to the guild (default to lowest rank, for backward compatibility)
@@ -282,14 +293,14 @@ pub mod GuildComponent {
             assert!(member.addr != Zero::zero(), "Target member does not exist in the guild");
         }
 
-        /// Internal: Get the inviter's rank id (owner is always rank 0)
-        fn _get_inviter_rank_id(self: @ComponentState<TContractState>) -> u8 {
-            let inviter = get_caller_address();
-            if inviter == self.owner.read() {
+        /// Internal: Get the member's rank id (owner is always rank 0)
+        fn _get_member_rank_id(self: @ComponentState<TContractState>) -> u8 {
+            let member = get_caller_address();
+            if member == self.owner.read() {
                 0_u8
             } else {
-                let inviter_member = self.members.read(inviter);
-                inviter_member.rank_id
+                let member_data = self.members.read(member);
+                member_data.rank_id
             }
         }
 
@@ -329,6 +340,17 @@ pub mod GuildComponent {
             ref self: ComponentState<TContractState>, member: ContractAddress,
         ) {
             self.pending_invites.write(member, 0_u8);
+        }
+
+        /// Internal: Promote a member to a new rank
+        fn _promote_member(
+            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        ) {
+            self._validate_member(member);
+            self._validate_rank_exists(rank_id);
+            let mut member_data = self.members.read(member);
+            member_data.rank_id = rank_id;
+            self.members.write(member, member_data);
         }
     }
 }
