@@ -51,5 +51,7 @@ pub trait IGuildMetadata<TState> {
     fn max_rank(self: @TState) -> u8;
 
     fn get_rank_permissions(ref self: TState) -> Array<Rank>;
+
+    fn get_token_address(self: @TState) -> ContractAddress;
 }
 

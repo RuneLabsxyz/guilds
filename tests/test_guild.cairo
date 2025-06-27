@@ -2,7 +2,7 @@ use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::{GuildMetadataImpl, InternalImpl};
 use guilds::guild::interface::IGuild;
 use guilds::mocks::guild::GuildMock;
-use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER};
+use guilds::tests::constants::{ALICE, BOB, CHARLIE, OWNER, TOKEN_ADDRESS};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address, test_address,
 };
@@ -27,7 +27,7 @@ fn test_guild_initializer() {
     let rank_name: felt252 = 1;
 
     // Call the initializer
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
 
     assert_eq!(state.get_guild_name(), guild_name, "Guild name should match the initialized value");
 }
@@ -37,7 +37,7 @@ fn test_guild_invite() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
 
     state.create_rank(2, true, true, 2, true);
     state.invite_member(ALICE, Option::None);
@@ -51,7 +51,7 @@ fn test_guild_invite_nonowner() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
 
     start_cheat_caller_address(test_address(), BOB);
 
@@ -66,7 +66,7 @@ fn test_guild_double_invite() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     start_cheat_caller_address(test_address(), OWNER);
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     state.create_rank(2, true, true, 2, true);
 
     state.invite_member(ALICE, Option::None);
@@ -85,7 +85,7 @@ fn test_guild_kick() {
     let rank_name: felt252 = 1;
     start_cheat_caller_address(test_address(), OWNER);
 
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     // Create a kickable rank
     state.create_rank(2, true, true, 2, true);
     let rank_id = state.rank_count.read() - 1_u8;
@@ -103,7 +103,7 @@ fn test_phantom_guild_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
 
     state.kick_member(ALICE);
 }
@@ -114,7 +114,7 @@ fn test_guild_double_kick() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     // Create a kickable rank
     state.create_rank(2, true, true, 2, true);
     let rank_id = state.rank_count.read() - 1_u8;
@@ -133,7 +133,7 @@ fn test_promote_member_success() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     start_cheat_caller_address(test_address(), OWNER);
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     // Create two more ranks
     state.create_rank(2, true, true, 2, true);
     state.create_rank(3, true, true, 3, true);
@@ -156,7 +156,7 @@ fn test_promote_member_to_higher_or_same_rank_should_fail() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     start_cheat_caller_address(test_address(), OWNER);
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     state.create_rank(2, true, true, 2, true);
     // Invite ALICE and assign her the lowest rank
     let lowest_rank = state.rank_count.read() - 1_u8;
@@ -174,7 +174,7 @@ fn test_promote_non_member_should_fail() {
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
     start_cheat_caller_address(test_address(), OWNER);
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     // Try to promote BOB who is not a member
     state.promote_member(BOB, 1_u8);
 }
@@ -185,7 +185,7 @@ fn test_non_member_cannot_promote() {
     let mut state = COMPONENT_STATE();
     let guild_name: felt252 = 1234;
     let rank_name: felt252 = 1;
-    state.initializer(guild_name, rank_name);
+    state.initializer(guild_name, rank_name, Option::Some(TOKEN_ADDRESS));
     state.create_rank(2, true, true, 2, true);
     // Invite ALICE and assign her the lowest rank
     let lowest_rank = state.rank_count.read() - 1_u8;

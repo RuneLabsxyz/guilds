@@ -1,5 +1,5 @@
 use core::array::Array;
-use core::num::traits::{Bounded, Zero};
+use core::num::traits::Zero;
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
@@ -27,10 +27,13 @@ pub mod GuildComponent {
     use crate::guild::interface;
     use super::{*, StoragePointerReadAccess};
 
+    const DUMMY_TOKEN_ADDRESS: ContractAddress = 0xDEADBEEF.try_into().unwrap();
+
     #[storage]
     pub struct Storage {
         pub guild_name: felt252,
         pub owner: ContractAddress,
+        pub token_address: ContractAddress,
         pub members: Map<ContractAddress, Member>,
         pub ranks: Map<u8, Rank>,
         pub rank_count: u8,
@@ -135,12 +138,19 @@ pub mod GuildComponent {
             }
             ranks_array
         }
+
+        fn get_token_address(self: @ComponentState<TContractState>) -> ContractAddress {
+            self.token_address.read()
+        }
     }
 
     #[generate_trait]
     pub impl InternalImpl<TContractState> of InternalTrait<TContractState> {
         fn initializer(
-            ref self: ComponentState<TContractState>, guild_name: felt252, rank_name: felt252,
+            ref self: ComponentState<TContractState>,
+            guild_name: felt252,
+            rank_name: felt252,
+            token_address: Option<ContractAddress>,
         ) {
             let caller = get_caller_address();
             self.guild_name.write(guild_name);
@@ -152,6 +162,11 @@ pub mod GuildComponent {
             self.ranks.write(0, rank);
             self.members.write(caller, creator);
             self.rank_count.write(1_u8);
+            let token_addr = match token_address {
+                Option::Some(addr) => addr,
+                Option::None => DUMMY_TOKEN_ADDRESS,
+            };
+            self.token_address.write(token_addr);
         }
 
         /// Internal: Add a member to the guild with a specific rank
