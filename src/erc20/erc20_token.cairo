@@ -4,6 +4,7 @@ use starknet::ContractAddress;
 pub trait IERC20Equity<TContractState> {
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn initializer(ref self: TContractState, token_name: ByteArray, token_symbol: ByteArray);
+    fn balance_of(ref self: TContractState, account: ContractAddress) -> u256;
 }
 
 
@@ -11,6 +12,7 @@ pub trait IERC20Equity<TContractState> {
 pub mod ERC20EquityComponent {
     use openzeppelin_token::erc20::ERC20Component::InternalImpl as ERC20Internal;
     use openzeppelin_token::erc20::{DefaultConfig, ERC20Component, ERC20HooksEmptyImpl};
+    use openzeppelin_token::erc20::ERC20Component::ERC20Impl;
     use starknet::ContractAddress;
 
     #[storage]
@@ -39,6 +41,11 @@ pub mod ERC20EquityComponent {
         ) {
             let mut erc20 = get_dep_component_mut!(ref self, Token);
             erc20.mint(recipient, amount);
+        }
+
+        fn balance_of(ref self: ComponentState<TContractState>, account: ContractAddress) -> u256 {
+            let erc20 = get_dep_component!(@self, Token);
+            erc20.balance_of(account);
         }
     }
 }
