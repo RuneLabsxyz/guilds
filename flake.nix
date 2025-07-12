@@ -1,50 +1,47 @@
 {
-  description = "Cairo toolchain in nix";
+  description = "Description for the project";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    cairo-nix.url = "github:knownasred/cairo-nix";
+    devshell.url = "github:numtide/devshell";
   };
 
-  outputs = { nixpkgs, flake-utils, ... }:
-    let
-      overlay = import ./overlay.nix;
-    in
-    {
-      overlays = {
-        default = overlay;
-      };
+  outputs = inputs @ {flake-parts, ...}:
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [
+        inputs.devshell.flakeModule
+      ];
 
-      templates = {
-        default = {
-          path = ./templates/simple;
-          description = "A basic project using cairo-nix";
-        };
-      };
-    } // flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ overlay ];
-        };
-      in
-      {
-        formatter = pkgs.nixpkgs-fmt;
+      systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
+      perSystem = {
+        config,
+        self',
+        inputs',
+        pkgs,
+        system,
+        ...
+      }: {
+        # Per-system attributes can be defined here. The self' and inputs'
+        # module parameters provide easy access to attributes of the same
+        # system.
 
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            cargo
-            cairo-bin.stable.cairo
-            cairo-bin.stable.scarb
+        # Equivalent to  inputs'.nixpkgs.legacyPackages.hello;
+        devshells.default = {
+          packages = [
+            inputs'.cairo-nix.packages.scarb
+            inputs'.cairo-nix.packages.starkli
+
+            pkgs.rustc
+            pkgs.cargo
           ];
         };
-
-        packages = {
-          default = pkgs.cairo-bin.stable.scarb;
-          cairo = pkgs.cairo-bin.stable.cairo;
-          scarb = pkgs.cairo-bin.stable.scarb;
-          cairo-beta = pkgs.cairo-bin.beta.cairo;
-          scarb-beta = pkgs.cairo-bin.beta.scarb;
-        };
-      });
+      };
+      flake = {
+        # The usual flake attributes can be defined here, including system-
+        # agnostic ones like nixosModule and system-enumerating ones, although
+        # those are more easily expressed in perSystem.
+      };
+    };
 }
