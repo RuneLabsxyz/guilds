@@ -129,6 +129,8 @@ pub struct EpochSnapshot {
     pub shareholder_amount: u256,
     /// Total active token supply at snapshot time (for shareholder calculations)
     pub active_supply: u256,
+    /// Sum of payout weights for all active members at snapshot time
+    pub total_payout_weight: u32,
     /// Block timestamp when this epoch was finalized
     pub finalized_at: u64,
 }

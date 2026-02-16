@@ -207,13 +207,21 @@ pub mod GuildToken {
         }
 
         fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
-            self.only_governor();
+            let caller = get_caller_address();
+            assert!(
+                caller == self.governor_address.read() || caller == self.guild_address.read(),
+                "Only governor or guild can mint",
+            );
             self.erc20.mint(recipient, amount);
             self.last_activity.write(recipient, get_block_timestamp());
         }
 
         fn burn(ref self: ContractState, account: ContractAddress, amount: u256) {
-            self.only_governor();
+            let caller = get_caller_address();
+            assert!(
+                caller == self.governor_address.read() || caller == self.guild_address.read(),
+                "Only governor or guild can burn",
+            );
             self.erc20.burn(account, amount);
 
             if self.inactivity_flags.read(account).flagged_at > 0 {
@@ -231,10 +239,4 @@ pub mod GuildToken {
         }
     }
 
-    #[generate_trait]
-    impl InternalImpl of InternalTrait {
-        fn only_governor(self: @ContractState) {
-            assert!(get_caller_address() == self.governor_address.read(), "Only governor");
-        }
-    }
 }

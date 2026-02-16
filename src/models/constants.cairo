@@ -53,3 +53,6 @@ pub const DEFAULT_INACTIVITY_THRESHOLD: u64 = 7_776_000;
 
 /// Default initial token supply (1000 tokens with 18 decimals)
 pub const DEFAULT_INITIAL_SUPPLY: u256 = 1_000_000_000_000_000_000_000;
+
+/// 10^18 token unit multiplier used for share pricing
+pub const TOKEN_MULTIPLIER: u256 = 1_000_000_000_000_000_000;

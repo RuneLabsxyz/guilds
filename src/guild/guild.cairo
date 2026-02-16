@@ -1,6 +1,5 @@
 #[starknet::contract]
 pub mod Guild {
-    use core::panic_with_felt252;
     use guilds::guild::guild_contract::GuildComponent;
     use guilds::guild::guild_contract::GuildComponent::InternalImpl;
     use guilds::interfaces::guild::{IGuild, IGuildView};
@@ -147,42 +146,39 @@ pub mod Guild {
         }
 
         fn set_distribution_policy(ref self: ContractState, policy: DistributionPolicy) {
-            let _ = policy;
-            panic_with_felt252('Not implemented');
+            self.guild.set_distribution_policy(policy);
+        }
+
+        fn set_revenue_token(ref self: ContractState, token: ContractAddress) {
+            self.guild.set_revenue_token(token);
         }
 
         fn finalize_epoch(ref self: ContractState) {
-            panic_with_felt252('Not implemented');
+            self.guild.finalize_epoch();
         }
 
         fn claim_player_revenue(ref self: ContractState, epoch: u64) {
-            let _ = epoch;
-            panic_with_felt252('Not implemented');
+            self.guild.claim_player_revenue(epoch);
         }
 
         fn claim_shareholder_revenue(ref self: ContractState, epoch: u64) {
-            let _ = epoch;
-            panic_with_felt252('Not implemented');
+            self.guild.claim_shareholder_revenue(epoch);
         }
 
         fn create_share_offer(ref self: ContractState, offer: ShareOffer) {
-            let _ = offer;
-            panic_with_felt252('Not implemented');
+            self.guild.create_share_offer(offer);
         }
 
         fn buy_shares(ref self: ContractState, amount: u256) {
-            let _ = amount;
-            panic_with_felt252('Not implemented');
+            self.guild.buy_shares(amount);
         }
 
         fn set_redemption_window(ref self: ContractState, window: RedemptionWindow) {
-            let _ = window;
-            panic_with_felt252('Not implemented');
+            self.guild.set_redemption_window(window);
         }
 
         fn redeem_shares(ref self: ContractState, amount: u256) {
-            let _ = amount;
-            panic_with_felt252('Not implemented');
+            self.guild.redeem_shares(amount);
         }
 
         fn dissolve(ref self: ContractState) {

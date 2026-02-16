@@ -128,6 +128,7 @@ fn test_epoch_snapshot_construction() {
         player_amount: 5000,
         shareholder_amount: 2000,
         active_supply: 1000000,
+        total_payout_weight: 700,
         finalized_at: 5000,
     };
     assert!(snapshot.total_revenue == 10000);
@@ -135,6 +136,7 @@ fn test_epoch_snapshot_construction() {
     assert!(snapshot.player_amount == 5000);
     assert!(snapshot.shareholder_amount == 2000);
     assert!(snapshot.active_supply == 1000000);
+    assert!(snapshot.total_payout_weight == 700);
     assert!(snapshot.finalized_at == 5000);
     // Revenue split should sum correctly
     let sum = snapshot.treasury_amount + snapshot.player_amount + snapshot.shareholder_amount;

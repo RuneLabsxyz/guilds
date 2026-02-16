@@ -92,6 +92,9 @@ pub trait IGuild<TState> {
     /// Set the revenue distribution policy. Only callable by the Governor.
     fn set_distribution_policy(ref self: TState, policy: DistributionPolicy);
 
+    /// Set the ERC20 token used for revenue accounting and payouts.
+    fn set_revenue_token(ref self: TState, token: ContractAddress);
+
     /// Finalize the current epoch, snapshotting revenue for claims.
     fn finalize_epoch(ref self: TState);
 

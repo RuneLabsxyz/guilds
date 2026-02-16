@@ -5,7 +5,10 @@ use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
-use starknet::{ContractAddress, SyscallResultTrait, get_block_timestamp, get_caller_address};
+use starknet::{
+    ContractAddress, SyscallResultTrait, get_block_timestamp, get_caller_address,
+    get_contract_address,
+};
 
 /// Guild Component v0.2
 ///
@@ -19,13 +22,18 @@ use starknet::{ContractAddress, SyscallResultTrait, get_block_timestamp, get_cal
 #[starknet::component]
 pub mod GuildComponent {
     use guilds::interfaces::ponziland::{IPonziLandActionsDispatcher, IPonziLandActionsDispatcherTrait};
-    use guilds::models::constants::ActionType;
+    use guilds::interfaces::token::{IGuildTokenDispatcher, IGuildTokenDispatcherTrait};
+    use guilds::models::constants::{
+        ActionType, BPS_DENOMINATOR, DEFAULT_PLAYER_BPS, DEFAULT_SHAREHOLDER_BPS,
+        DEFAULT_TREASURY_BPS, TOKEN_MULTIPLIER,
+    };
     use guilds::models::events;
     use guilds::models::types::{
         DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
         Role, ShareOffer,
     };
     use openzeppelin_interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin_interfaces::votes::{IVotesDispatcher, IVotesDispatcherTrait};
     use starknet::syscalls;
     use super::*;
 
@@ -61,6 +69,10 @@ pub mod GuildComponent {
         pub distribution_policy: DistributionPolicy,
         pub current_epoch: u64,
         pub epoch_snapshots: Map<u64, EpochSnapshot>,
+        pub revenue_token: ContractAddress,
+        pub revenue_balance_checkpoint: u256,
+        pub total_payout_weight: u32,
+        pub role_member_count: Map<u8, u32>,
         pub member_last_claimed_epoch: Map<ContractAddress, u64>,
         pub shareholder_last_claimed_epoch: Map<ContractAddress, u64>,
 
@@ -94,6 +106,13 @@ pub mod GuildComponent {
         PluginActionExecuted: events::PluginActionExecuted,
         PluginRegistered: events::PluginRegistered,
         PluginToggled: events::PluginToggled,
+        EpochFinalized: events::EpochFinalized,
+        PlayerRevenueClaimed: events::PlayerRevenueClaimed,
+        ShareholderRevenueClaimed: events::ShareholderRevenueClaimed,
+        DistributionPolicyChanged: events::DistributionPolicyChanged,
+        ShareOfferCreated: events::ShareOfferCreated,
+        SharesPurchased: events::SharesPurchased,
+        SharesRedeemed: events::SharesRedeemed,
         GuildDissolved: events::GuildDissolved,
     }
 
@@ -132,6 +151,18 @@ pub mod GuildComponent {
         pub const PLUGIN_OFFSET_OVERFLOW: felt252 = 'Offset+count exceeds bitmask';
         pub const INVALID_CORE_ACTION: felt252 = 'Invalid core action type';
         pub const PONZILAND_NOT_REGISTERED: felt252 = 'PonziLand plugin not registered';
+        pub const INVALID_BPS_SUM: felt252 = 'Invalid policy bps sum';
+        pub const REVENUE_TOKEN_NOT_SET: felt252 = 'Revenue token not set';
+        pub const NO_NEW_REVENUE: felt252 = 'No new revenue to distribute';
+        pub const EPOCH_NOT_FINALIZED: felt252 = 'Epoch not finalized';
+        pub const ALREADY_CLAIMED_EPOCH: felt252 = 'Already claimed this epoch';
+        pub const ACTIVE_OFFER_EXISTS: felt252 = 'Active offer already exists';
+        pub const NO_ACTIVE_OFFER: felt252 = 'No active share offer';
+        pub const OFFER_EXPIRED: felt252 = 'Share offer expired';
+        pub const OFFER_EXCEEDS_MAX: felt252 = 'Purchase exceeds offer max';
+        pub const REDEMPTION_NOT_ENABLED: felt252 = 'Redemption not enabled';
+        pub const REDEMPTION_LIMIT_EXCEEDED: felt252 = 'Exceeds epoch redemption limit';
+        pub const REDEMPTION_COOLDOWN_ACTIVE: felt252 = 'Redemption cooldown active';
     }
 
     // ====================================================================
@@ -167,6 +198,17 @@ pub mod GuildComponent {
             self.members.write(founder, member);
             self.member_count.write(1);
             self.founder_count.write(1);
+            self.total_payout_weight.write(founder_role.payout_weight.into());
+            self.role_member_count.write(0, 1);
+            self
+                .distribution_policy
+                .write(
+                    DistributionPolicy {
+                        treasury_bps: DEFAULT_TREASURY_BPS,
+                        player_bps: DEFAULT_PLAYER_BPS,
+                        shareholder_bps: DEFAULT_SHAREHOLDER_BPS,
+                    },
+                );
         }
 
         // ----------------------------------------------------------------
@@ -290,7 +332,7 @@ pub mod GuildComponent {
         /// Founder role (0) must always have can_be_kicked = false.
         fn modify_role(ref self: ComponentState<TContractState>, role_id: u8, role: Role) {
             self.only_governor();
-            self.get_role_or_panic(role_id);
+            let old_role = self.get_role_or_panic(role_id);
 
             // Founder role must never be kickable
             if role_id == 0 {
@@ -298,6 +340,15 @@ pub mod GuildComponent {
             }
 
             self.roles.write(role_id, role);
+
+            let count = self.role_member_count.read(role_id);
+            let old_weight: u32 = old_role.payout_weight.into();
+            let new_weight: u32 = role.payout_weight.into();
+            if old_weight != new_weight {
+                self
+                    .total_payout_weight
+                    .write(self.total_payout_weight.read() - old_weight * count + new_weight * count);
+            }
 
             self
                 .emit(
@@ -353,6 +404,14 @@ pub mod GuildComponent {
 
             if action_type == ActionType::TRANSFER {
                 IERC20Dispatcher { contract_address: token }.transfer(target, amount);
+                if token == self.revenue_token.read() {
+                    let checkpoint = self.revenue_balance_checkpoint.read();
+                    if checkpoint >= amount {
+                        self.revenue_balance_checkpoint.write(checkpoint - amount);
+                    } else {
+                        self.revenue_balance_checkpoint.write(0);
+                    }
+                }
             } else if action_type == ActionType::APPROVE {
                 IERC20Dispatcher { contract_address: token }.approve(target, amount);
             } else if action_type == ActionType::EXECUTE {
@@ -501,6 +560,256 @@ pub mod GuildComponent {
                 .withdraw_stake(land_location);
         }
 
+        fn set_distribution_policy(
+            ref self: ComponentState<TContractState>, policy: DistributionPolicy,
+        ) {
+            self.only_governor();
+            let total_bps = policy.treasury_bps + policy.player_bps + policy.shareholder_bps;
+            assert!(total_bps == BPS_DENOMINATOR, "{}", Errors::INVALID_BPS_SUM);
+            self.distribution_policy.write(policy);
+            self
+                .emit(
+                    events::DistributionPolicyChanged {
+                        treasury_bps: policy.treasury_bps,
+                        player_bps: policy.player_bps,
+                        shareholder_bps: policy.shareholder_bps,
+                    },
+                );
+        }
+
+        fn set_revenue_token(ref self: ComponentState<TContractState>, token: ContractAddress) {
+            self.only_governor();
+            self.revenue_token.write(token);
+            let balance = IERC20Dispatcher { contract_address: token }.balance_of(get_contract_address());
+            self.revenue_balance_checkpoint.write(balance);
+        }
+
+        fn finalize_epoch(ref self: ComponentState<TContractState>) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::DISTRIBUTE, 0);
+
+            let revenue_token = self.revenue_token.read();
+            assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
+
+            let current_balance = IERC20Dispatcher {
+                contract_address: revenue_token,
+            }
+                .balance_of(get_contract_address());
+            let checkpoint = self.revenue_balance_checkpoint.read();
+            let new_revenue = current_balance - checkpoint;
+            assert!(new_revenue > 0, "{}", Errors::NO_NEW_REVENUE);
+
+            let policy = self.distribution_policy.read();
+            let bps_denominator: u256 = BPS_DENOMINATOR.into();
+            let treasury_amount = (new_revenue * policy.treasury_bps.into()) / bps_denominator;
+            let player_amount = (new_revenue * policy.player_bps.into()) / bps_denominator;
+            let shareholder_amount = new_revenue - treasury_amount - player_amount;
+
+            let active_supply = IGuildTokenDispatcher {
+                contract_address: self.token_address.read(),
+            }
+                .active_supply();
+
+            let epoch = self.current_epoch.read();
+            self
+                .epoch_snapshots
+                .write(
+                    epoch,
+                    EpochSnapshot {
+                        total_revenue: new_revenue,
+                        treasury_amount,
+                        player_amount,
+                        shareholder_amount,
+                        active_supply,
+                        total_payout_weight: self.total_payout_weight.read(),
+                        finalized_at: get_block_timestamp(),
+                    },
+                );
+            self.current_epoch.write(epoch + 1);
+            self.revenue_balance_checkpoint.write(current_balance);
+
+            self
+                .emit(
+                    events::EpochFinalized {
+                        epoch,
+                        total_revenue: new_revenue,
+                        treasury_amount,
+                        player_amount,
+                        shareholder_amount,
+                    },
+                );
+        }
+
+        fn claim_player_revenue(ref self: ComponentState<TContractState>, epoch: u64) {
+            let caller = get_caller_address();
+            let member = self.get_member_or_panic(caller);
+            assert!(epoch < self.current_epoch.read(), "{}", Errors::EPOCH_NOT_FINALIZED);
+
+            let next_claimable = self.member_last_claimed_epoch.read(caller);
+            assert!(epoch == next_claimable, "{}", Errors::ALREADY_CLAIMED_EPOCH);
+
+            let snapshot = self.epoch_snapshots.read(epoch);
+            assert!(snapshot.total_payout_weight > 0, "No payout weight");
+
+            let role = self.roles.read(member.role_id);
+            let share =
+                (snapshot.player_amount * role.payout_weight.into())
+                    / snapshot.total_payout_weight.into();
+
+            let revenue_token = self.revenue_token.read();
+            assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
+            IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, share);
+            let checkpoint = self.revenue_balance_checkpoint.read();
+            if checkpoint >= share {
+                self.revenue_balance_checkpoint.write(checkpoint - share);
+            } else {
+                self.revenue_balance_checkpoint.write(0);
+            }
+
+            self.member_last_claimed_epoch.write(caller, epoch + 1);
+            self.emit(events::PlayerRevenueClaimed { member: caller, epoch, amount: share });
+        }
+
+        fn claim_shareholder_revenue(ref self: ComponentState<TContractState>, epoch: u64) {
+            let caller = get_caller_address();
+            assert!(epoch < self.current_epoch.read(), "{}", Errors::EPOCH_NOT_FINALIZED);
+
+            let next_claimable = self.shareholder_last_claimed_epoch.read(caller);
+            assert!(epoch == next_claimable, "{}", Errors::ALREADY_CLAIMED_EPOCH);
+
+            let snapshot = self.epoch_snapshots.read(epoch);
+            assert!(snapshot.active_supply > 0, "No active supply");
+
+            let votes = IVotesDispatcher { contract_address: self.token_address.read() };
+            let holder_balance = votes.get_past_votes(caller, snapshot.finalized_at);
+            let share = (snapshot.shareholder_amount * holder_balance) / snapshot.active_supply;
+
+            let revenue_token = self.revenue_token.read();
+            assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
+            IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, share);
+            let checkpoint = self.revenue_balance_checkpoint.read();
+            if checkpoint >= share {
+                self.revenue_balance_checkpoint.write(checkpoint - share);
+            } else {
+                self.revenue_balance_checkpoint.write(0);
+            }
+
+            self.shareholder_last_claimed_epoch.write(caller, epoch + 1);
+            self.emit(events::ShareholderRevenueClaimed { shareholder: caller, epoch, amount: share });
+        }
+
+        fn create_share_offer(ref self: ComponentState<TContractState>, offer: ShareOffer) {
+            self.only_governor();
+            assert!(!self.has_active_offer.read(), "{}", Errors::ACTIVE_OFFER_EXISTS);
+            assert!(offer.max_total > 0, "Max total must be positive");
+            assert!(offer.price_per_share > 0, "Price must be positive");
+
+            self
+                .active_offer
+                .write(
+                    ShareOffer {
+                        deposit_token: offer.deposit_token,
+                        max_total: offer.max_total,
+                        minted_so_far: 0,
+                        price_per_share: offer.price_per_share,
+                        expires_at: offer.expires_at,
+                    },
+                );
+            self.has_active_offer.write(true);
+
+            self
+                .emit(
+                    events::ShareOfferCreated {
+                        deposit_token: offer.deposit_token,
+                        max_total: offer.max_total,
+                        price_per_share: offer.price_per_share,
+                        expires_at: offer.expires_at,
+                    },
+                );
+        }
+
+        fn buy_shares(ref self: ComponentState<TContractState>, amount: u256) {
+            assert!(self.has_active_offer.read(), "{}", Errors::NO_ACTIVE_OFFER);
+
+            let caller = get_caller_address();
+            let mut offer = self.active_offer.read();
+
+            if offer.expires_at > 0 {
+                assert!(get_block_timestamp() < offer.expires_at, "{}", Errors::OFFER_EXPIRED);
+            }
+
+            let next_minted = offer.minted_so_far + amount;
+            assert!(next_minted <= offer.max_total, "{}", Errors::OFFER_EXCEEDS_MAX);
+
+            let cost = (amount * offer.price_per_share) / TOKEN_MULTIPLIER;
+
+            IERC20Dispatcher { contract_address: offer.deposit_token }
+                .transfer_from(caller, get_contract_address(), cost);
+            IGuildTokenDispatcher { contract_address: self.token_address.read() }.mint(caller, amount);
+
+            offer.minted_so_far = next_minted;
+            self.active_offer.write(offer);
+
+            if next_minted == offer.max_total {
+                self.has_active_offer.write(false);
+            }
+
+            self.emit(events::SharesPurchased { buyer: caller, amount, cost });
+        }
+
+        fn set_redemption_window(
+            ref self: ComponentState<TContractState>, window: RedemptionWindow,
+        ) {
+            self.only_governor();
+            self.redemption_window.write(window);
+        }
+
+        fn redeem_shares(ref self: ComponentState<TContractState>, amount: u256) {
+            let caller = get_caller_address();
+            let mut window = self.redemption_window.read();
+            assert!(window.enabled, "{}", Errors::REDEMPTION_NOT_ENABLED);
+
+            let next_redeemed = window.redeemed_this_epoch + amount;
+            assert!(next_redeemed <= window.max_per_epoch, "{}", Errors::REDEMPTION_LIMIT_EXCEEDED);
+
+            let current_epoch = self.current_epoch.read();
+            let last_redemption_epoch = self.member_last_redemption_epoch.read(caller);
+            assert!(
+                current_epoch >= last_redemption_epoch + window.cooldown_epochs.into(),
+                "{}",
+                Errors::REDEMPTION_COOLDOWN_ACTIVE,
+            );
+
+            let revenue_token = self.revenue_token.read();
+            assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
+            let treasury_balance = IERC20Dispatcher {
+                contract_address: revenue_token,
+            }
+                .balance_of(get_contract_address());
+            let total_supply = IERC20Dispatcher {
+                contract_address: self.token_address.read(),
+            }
+                .total_supply();
+            assert!(total_supply > 0, "No token supply");
+
+            let payout = (treasury_balance * amount) / total_supply;
+
+            IGuildTokenDispatcher { contract_address: self.token_address.read() }.burn(caller, amount);
+            IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, payout);
+            let checkpoint = self.revenue_balance_checkpoint.read();
+            if checkpoint >= payout {
+                self.revenue_balance_checkpoint.write(checkpoint - payout);
+            } else {
+                self.revenue_balance_checkpoint.write(0);
+            }
+
+            window.redeemed_this_epoch = next_redeemed;
+            self.redemption_window.write(window);
+            self.member_last_redemption_epoch.write(caller, current_epoch);
+
+            self.emit(events::SharesRedeemed { redeemer: caller, amount, payout });
+        }
+
         fn dissolve(ref self: ComponentState<TContractState>) {
             self.only_governor();
             self.is_dissolved.write(true);
@@ -562,7 +871,7 @@ pub mod GuildComponent {
                 assert!(get_block_timestamp() < invite.expires_at, "{}", Errors::INVITE_EXPIRED);
             }
 
-            self.get_role_or_panic(invite.role_id);
+            let role = self.get_role_or_panic(invite.role_id);
 
             let member = Member { addr: caller, role_id: invite.role_id, joined_at: get_block_timestamp() };
             self.members.write(caller, member);
@@ -581,6 +890,11 @@ pub mod GuildComponent {
             if invite.role_id == 0 {
                 self.founder_count.write(self.founder_count.read() + 1);
             }
+            let weight: u32 = role.payout_weight.into();
+            self.total_payout_weight.write(self.total_payout_weight.read() + weight);
+            self
+                .role_member_count
+                .write(invite.role_id, self.role_member_count.read(invite.role_id) + 1);
 
             self.emit(events::MemberJoined { member: caller, role_id: invite.role_id });
         }
@@ -604,6 +918,18 @@ pub mod GuildComponent {
             }
 
             let target_member = self.get_member_or_panic(target);
+            let role = self.roles.read(target_member.role_id);
+            let weight: u32 = role.payout_weight.into();
+            let current_weight = self.total_payout_weight.read();
+            if current_weight >= weight {
+                self.total_payout_weight.write(current_weight - weight);
+            } else {
+                self.total_payout_weight.write(0);
+            }
+            let role_count = self.role_member_count.read(target_member.role_id);
+            if role_count > 0 {
+                self.role_member_count.write(target_member.role_id, role_count - 1);
+            }
             self
                 .members
                 .write(target, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
@@ -627,6 +953,19 @@ pub mod GuildComponent {
                     "{}",
                     Errors::CANNOT_LEAVE_AS_LAST_FOUNDER,
                 );
+            }
+
+            let role = self.roles.read(member.role_id);
+            let weight: u32 = role.payout_weight.into();
+            let current_weight = self.total_payout_weight.read();
+            if current_weight >= weight {
+                self.total_payout_weight.write(current_weight - weight);
+            } else {
+                self.total_payout_weight.write(0);
+            }
+            let role_count = self.role_member_count.read(member.role_id);
+            if role_count > 0 {
+                self.role_member_count.write(member.role_id, role_count - 1);
             }
 
             self
@@ -668,6 +1007,23 @@ pub mod GuildComponent {
             let old_role_id = target_member.role_id;
             target_member.role_id = new_role_id;
             self.members.write(target, target_member);
+
+            let old_role = self.roles.read(old_role_id);
+            let new_role = self.roles.read(new_role_id);
+            let old_weight: u32 = old_role.payout_weight.into();
+            let new_weight: u32 = new_role.payout_weight.into();
+            let current_weight = self.total_payout_weight.read();
+            if current_weight >= old_weight {
+                self.total_payout_weight.write(current_weight - old_weight + new_weight);
+            } else {
+                self.total_payout_weight.write(new_weight);
+            }
+
+            let old_count = self.role_member_count.read(old_role_id);
+            if old_count > 0 {
+                self.role_member_count.write(old_role_id, old_count - 1);
+            }
+            self.role_member_count.write(new_role_id, self.role_member_count.read(new_role_id) + 1);
 
             if old_role_id == 0 && new_role_id != 0 {
                 self.founder_count.write(self.founder_count.read() - 1);
