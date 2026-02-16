@@ -110,16 +110,23 @@ fn deploy_ponziland() -> ContractAddress {
 }
 
 fn ponzi_u32(address: ContractAddress, selector: felt252) -> u32 {
-    let mut ret = syscalls::call_contract_syscall(address, selector, array![].span()).unwrap_syscall();
+    let mut ret = syscalls::call_contract_syscall(address, selector, array![].span())
+        .unwrap_syscall();
     Serde::deserialize(ref ret).unwrap()
 }
 
 fn ponzi_u16(address: ContractAddress, selector: felt252) -> u16 {
-    let mut ret = syscalls::call_contract_syscall(address, selector, array![].span()).unwrap_syscall();
+    let mut ret = syscalls::call_contract_syscall(address, selector, array![].span())
+        .unwrap_syscall();
     Serde::deserialize(ref ret).unwrap()
 }
 
-fn fund_guild(token_address: ContractAddress, token: IERC20Dispatcher, guild_address: ContractAddress, amount: u256) {
+fn fund_guild(
+    token_address: ContractAddress,
+    token: IERC20Dispatcher,
+    guild_address: ContractAddress,
+    amount: u256,
+) {
     start_cheat_caller_address(token_address, FOUNDER());
     token.transfer(guild_address, amount);
 }
@@ -134,7 +141,9 @@ fn create_member_and_join(
     guild.accept_invite();
 }
 
-fn register_ponziland_plugin(guild_address: ContractAddress, guild: IGuildDispatcher, target: ContractAddress) {
+fn register_ponziland_plugin(
+    guild_address: ContractAddress, guild: IGuildDispatcher, target: ContractAddress,
+) {
     start_cheat_caller_address(guild_address, GOVERNOR());
     guild.register_plugin('ponziland', target, 8, 6);
 }
@@ -147,7 +156,10 @@ fn test_execute_transfer_with_permission() {
     create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::TRANSFER, 2_000));
 
     start_cheat_caller_address(guild_address, ALICE());
-    guild.execute_core_action(ActionType::TRANSFER, RECIPIENT(), token_address, 500, array![].span());
+    guild
+        .execute_core_action(
+            ActionType::TRANSFER, RECIPIENT(), token_address, 500, array![].span(),
+        );
 
     assert!(token.balance_of(RECIPIENT()) == 500);
 }
@@ -161,7 +173,10 @@ fn test_execute_transfer_fails_no_permission() {
     create_member_and_join(guild_address, guild, ALICE(), member_role(0, 2_000));
 
     start_cheat_caller_address(guild_address, ALICE());
-    guild.execute_core_action(ActionType::TRANSFER, RECIPIENT(), token_address, 500, array![].span());
+    guild
+        .execute_core_action(
+            ActionType::TRANSFER, RECIPIENT(), token_address, 500, array![].span(),
+        );
 }
 
 #[test]
@@ -173,7 +188,10 @@ fn test_execute_transfer_fails_exceeds_spending_limit() {
     create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::TRANSFER, 300));
 
     start_cheat_caller_address(guild_address, ALICE());
-    guild.execute_core_action(ActionType::TRANSFER, RECIPIENT(), token_address, 500, array![].span());
+    guild
+        .execute_core_action(
+            ActionType::TRANSFER, RECIPIENT(), token_address, 500, array![].span(),
+        );
 }
 
 #[test]
@@ -215,7 +233,10 @@ fn test_execute_action_governor_bypasses() {
     fund_guild(token_address, token, guild_address, 1_000);
 
     start_cheat_caller_address(guild_address, GOVERNOR());
-    guild.execute_core_action(ActionType::TRANSFER, RECIPIENT(), token_address, 900, array![].span());
+    guild
+        .execute_core_action(
+            ActionType::TRANSFER, RECIPIENT(), token_address, 900, array![].span(),
+        );
     assert!(token.balance_of(RECIPIENT()) == 900);
 }
 
@@ -321,10 +342,7 @@ fn test_execute_plugin_action_with_permission() {
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
     create_member_and_join(
-        guild_address,
-        guild,
-        ALICE(),
-        member_role(ActionType::PONZI_CLAIM_YIELD, 0),
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_CLAIM_YIELD, 0),
     );
 
     start_cheat_caller_address(guild_address, ALICE());
@@ -353,10 +371,7 @@ fn test_execute_plugin_action_fails_disabled() {
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
     create_member_and_join(
-        guild_address,
-        guild,
-        ALICE(),
-        member_role(ActionType::PONZI_CLAIM_YIELD, 0),
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_CLAIM_YIELD, 0),
     );
 
     start_cheat_caller_address(guild_address, GOVERNOR());
@@ -371,10 +386,7 @@ fn test_execute_plugin_action_fails_disabled() {
 fn test_execute_plugin_action_fails_not_found() {
     let (guild_address, guild, _) = deploy_guild();
     create_member_and_join(
-        guild_address,
-        guild,
-        ALICE(),
-        member_role(ActionType::PONZI_CLAIM_YIELD, 0),
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_CLAIM_YIELD, 0),
     );
 
     start_cheat_caller_address(guild_address, ALICE());
@@ -387,7 +399,9 @@ fn test_execute_plugin_action_fails_action_out_of_range() {
     let (guild_address, guild, _) = deploy_guild();
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
-    create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::PONZI_CLAIM_YIELD, 0));
+    create_member_and_join(
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_CLAIM_YIELD, 0),
+    );
 
     start_cheat_caller_address(guild_address, ALICE());
     guild.execute_plugin_action('ponziland', 6, selector!("claim"), array![12].span());
@@ -399,10 +413,7 @@ fn test_ponzi_buy_land_with_permission() {
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
     create_member_and_join(
-        guild_address,
-        guild,
-        ALICE(),
-        member_role(ActionType::PONZI_BUY_LAND, 500),
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_BUY_LAND, 500),
     );
 
     start_cheat_caller_address(guild_address, ALICE());
@@ -429,10 +440,7 @@ fn test_ponzi_buy_land_fails_no_permission() {
 fn test_ponzi_buy_land_fails_plugin_not_registered() {
     let (guild_address, guild, _) = deploy_guild();
     create_member_and_join(
-        guild_address,
-        guild,
-        ALICE(),
-        member_role(ActionType::PONZI_BUY_LAND, 500),
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_BUY_LAND, 500),
     );
 
     start_cheat_caller_address(guild_address, ALICE());
@@ -444,7 +452,9 @@ fn test_ponzi_set_price_with_permission() {
     let (guild_address, guild, _) = deploy_guild();
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
-    create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::PONZI_SET_PRICE, 0));
+    create_member_and_join(
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_SET_PRICE, 0),
+    );
 
     start_cheat_caller_address(guild_address, ALICE());
     guild.ponzi_set_price(7, 123);
@@ -459,10 +469,7 @@ fn test_ponzi_claim_yield_with_permission() {
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
     create_member_and_join(
-        guild_address,
-        guild,
-        ALICE(),
-        member_role(ActionType::PONZI_CLAIM_YIELD, 0),
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_CLAIM_YIELD, 0),
     );
 
     start_cheat_caller_address(guild_address, ALICE());
@@ -477,7 +484,9 @@ fn test_ponzi_increase_stake_with_permission() {
     let (guild_address, guild, _) = deploy_guild();
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
-    create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::PONZI_STAKE, 400));
+    create_member_and_join(
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_STAKE, 400),
+    );
 
     start_cheat_caller_address(guild_address, ALICE());
     guild.ponzi_increase_stake(10, 250);
@@ -491,7 +500,9 @@ fn test_ponzi_withdraw_stake_with_permission() {
     let (guild_address, guild, _) = deploy_guild();
     let ponzi_address = deploy_ponziland();
     register_ponziland_plugin(guild_address, guild, ponzi_address);
-    create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::PONZI_UNSTAKE, 0));
+    create_member_and_join(
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_UNSTAKE, 0),
+    );
 
     start_cheat_caller_address(guild_address, ALICE());
     guild.ponzi_withdraw_stake(11);

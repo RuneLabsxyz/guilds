@@ -2,11 +2,11 @@ use core::ops::{Deref, DerefMut};
 use core::serde::Serde;
 use guilds::guild::guild_contract::GuildComponent;
 use guilds::guild::guild_contract::GuildComponent::InternalImpl;
+use guilds::interfaces::token::{IGuildTokenDispatcher, IGuildTokenDispatcherTrait};
 use guilds::mocks::guild::GuildMock;
 use guilds::models::constants::{ActionType, TOKEN_MULTIPLIER};
 use guilds::models::types::{DistributionPolicy, RedemptionWindow, Role, ShareOffer};
 use guilds::tests::constants::AsAddressTrait;
-use guilds::interfaces::token::{IGuildTokenDispatcher, IGuildTokenDispatcherTrait};
 use openzeppelin_interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use openzeppelin_interfaces::votes::{IVotesDispatcher, IVotesDispatcherTrait};
 use snforge_std::{
@@ -142,13 +142,13 @@ fn fund_contract(token: ContractAddress, amount: u256) {
     erc20.transfer(test_address(), amount);
 }
 
-fn set_distribution(ref state: TestState, treasury_bps: u16, player_bps: u16, shareholder_bps: u16) {
+fn set_distribution(
+    ref state: TestState, treasury_bps: u16, player_bps: u16, shareholder_bps: u16,
+) {
     start_cheat_caller_address(test_address(), GOVERNOR());
     state
         .guild
-        .set_distribution_policy(
-            DistributionPolicy { treasury_bps, player_bps, shareholder_bps },
-        );
+        .set_distribution_policy(DistributionPolicy { treasury_bps, player_bps, shareholder_bps });
 }
 
 fn set_revenue_token(ref state: TestState, token: ContractAddress) {
@@ -549,8 +549,8 @@ fn test_buy_shares_mints_tokens() {
     start_cheat_caller_address(test_address(), GOVERNOR());
     state.guild.buy_shares(2 * ONE());
     assert!(
-        IERC20Dispatcher { contract_address: guild_token }.balance_of(GOVERNOR())
-            == before + 2 * ONE(),
+        IERC20Dispatcher { contract_address: guild_token }.balance_of(GOVERNOR()) == before
+            + 2 * ONE(),
     );
 
     let _ = token;
@@ -869,5 +869,7 @@ fn test_buy_shares_cost_uses_token_multiplier() {
     let before = deposit.balance_of(test_address());
     start_cheat_caller_address(test_address(), GOVERNOR());
     state.guild.buy_shares(4 * ONE());
-    assert!(deposit.balance_of(test_address()) == before + (4 * ONE() * 3 * ONE()) / TOKEN_MULTIPLIER);
+    assert!(
+        deposit.balance_of(test_address()) == before + (4 * ONE() * 3 * ONE()) / TOKEN_MULTIPLIER,
+    );
 }

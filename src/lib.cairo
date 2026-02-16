@@ -3,16 +3,16 @@
 // ========================================================================
 
 pub mod models {
-    pub mod types;
-    pub mod events;
     pub mod constants;
+    pub mod events;
+    pub mod types;
 }
 
 pub mod interfaces {
-    pub mod guild;
-    pub mod token;
     pub mod factory;
+    pub mod guild;
     pub mod ponziland;
+    pub mod token;
 }
 
 // ========================================================================
@@ -20,8 +20,8 @@ pub mod interfaces {
 // ========================================================================
 
 pub mod guild {
-    pub mod guild_contract;
     pub mod guild;
+    pub mod guild_contract;
 }
 
 pub mod mocks {

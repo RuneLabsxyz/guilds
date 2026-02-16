@@ -24,6 +24,7 @@ sierra = true
 test = "snforge test"
 
 [tool.scarb]
+scarb-version = "2.13.1"
 allow-prebuilt-plugins = ["snforge_std"]
 
 # Visit https://foundry-rs.github.io/starknet-foundry/appendix/scarb-toml.html for more information

@@ -1,7 +1,8 @@
 use core::serde::Serde;
 use guilds::interfaces::token::{IGuildTokenDispatcher, IGuildTokenDispatcherTrait};
 use openzeppelin_interfaces::erc20::{
-    IERC20Dispatcher, IERC20DispatcherTrait, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
+    IERC20Dispatcher, IERC20DispatcherTrait, IERC20MetadataDispatcher,
+    IERC20MetadataDispatcherTrait,
 };
 use openzeppelin_interfaces::votes::{IVotesDispatcher, IVotesDispatcherTrait};
 use snforge_std::{

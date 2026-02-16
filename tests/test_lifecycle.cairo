@@ -5,9 +5,7 @@ use guilds::guild::guild_contract::GuildComponent::InternalImpl;
 use guilds::mocks::guild::GuildMock;
 use guilds::models::constants::ActionType;
 use guilds::models::types::{Member, PendingInvite, Role};
-use snforge_std::{
-    start_cheat_block_timestamp, start_cheat_caller_address, test_address,
-};
+use snforge_std::{start_cheat_block_timestamp, start_cheat_caller_address, test_address};
 use starknet::ContractAddress;
 use starknet::storage::{
     StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -133,7 +131,9 @@ fn weak_kicker_role() -> Role {
 fn setup_guild() -> TestState {
     let mut state = COMPONENT_STATE();
     start_cheat_caller_address(test_address(), FOUNDER());
-    state.guild.initializer('TestGuild', 'TG', TOKEN(), GOVERNOR(), FOUNDER(), default_founder_role());
+    state
+        .guild
+        .initializer('TestGuild', 'TG', TOKEN(), GOVERNOR(), FOUNDER(), default_founder_role());
     state
 }
 
@@ -652,12 +652,8 @@ fn test_revoke_invite_clears_pending_invite() {
 
     let invite = guild_storage(@state).pending_invites.read(CHARLIE());
     assert!(
-        invite
-            == PendingInvite {
-                role_id: 0,
-                invited_by: Zero::zero(),
-                invited_at: 0,
-                expires_at: 0,
-            },
+        invite == PendingInvite {
+            role_id: 0, invited_by: Zero::zero(), invited_at: 0, expires_at: 0,
+        },
     );
 }

@@ -4,7 +4,9 @@ use openzeppelin_interfaces::governance::extensions::{
     IGovernorSettingsAdminDispatcher, IGovernorSettingsAdminDispatcherTrait,
     IQuorumFractionDispatcher, IQuorumFractionDispatcherTrait,
 };
-use openzeppelin_interfaces::governor::{IGovernorDispatcher, IGovernorDispatcherTrait, ProposalState};
+use openzeppelin_interfaces::governor::{
+    IGovernorDispatcher, IGovernorDispatcherTrait, ProposalState,
+};
 use openzeppelin_interfaces::votes::{IVotesDispatcher, IVotesDispatcherTrait};
 use openzeppelin_utils::bytearray::ByteArrayExtTrait;
 use snforge_std::{
@@ -315,9 +317,7 @@ fn test_succeeded_proposal_can_be_executed() {
     let (governor, proposal_id) = propose_with_calls(
         token_address,
         governor_address,
-        array![
-            Call { to: token_address, selector: selector!("ping"), calldata: array![].span() }
-        ]
+        array![Call { to: token_address, selector: selector!("ping"), calldata: array![].span() }]
             .span(),
         description.clone(),
     );
@@ -327,8 +327,9 @@ fn test_succeeded_proposal_can_be_executed() {
     governor.cast_vote(proposal_id, 1);
 
     set_time(token_address, governor_address, BASE_TS() + VOTING_DELAY() + VOTING_PERIOD() + 5);
-    let calls =
-        array![Call { to: token_address, selector: selector!("ping"), calldata: array![].span() }];
+    let calls = array![
+        Call { to: token_address, selector: selector!("ping"), calldata: array![].span() },
+    ];
     governor.execute(calls.span(), description.hash());
 
     assert!(governor.state(proposal_id) == ProposalState::Executed);

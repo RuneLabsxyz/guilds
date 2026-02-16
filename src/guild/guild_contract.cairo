@@ -21,7 +21,9 @@ use starknet::{
 /// Membership management (invite/kick/promote) is permission-based.
 #[starknet::component]
 pub mod GuildComponent {
-    use guilds::interfaces::ponziland::{IPonziLandActionsDispatcher, IPonziLandActionsDispatcherTrait};
+    use guilds::interfaces::ponziland::{
+        IPonziLandActionsDispatcher, IPonziLandActionsDispatcherTrait,
+    };
     use guilds::interfaces::token::{IGuildTokenDispatcher, IGuildTokenDispatcherTrait};
     use guilds::models::constants::{
         ActionType, BPS_DENOMINATOR, DEFAULT_PLAYER_BPS, DEFAULT_SHAREHOLDER_BPS,
@@ -46,25 +48,20 @@ pub mod GuildComponent {
         // --- Identity ---
         pub guild_name: felt252,
         pub guild_ticker: felt252,
-
         // --- Cross-contract references ---
         pub token_address: ContractAddress,
         pub governor_address: ContractAddress,
-
         // --- Membership ---
         pub members: Map<ContractAddress, Member>,
         pub member_count: u32,
         pub founder_count: u32,
         pub pending_invites: Map<ContractAddress, PendingInvite>,
-
         // --- Roles ---
         pub roles: Map<u8, Role>,
         pub role_count: u8,
-
         // --- Plugins ---
         pub plugins: Map<felt252, PluginConfig>,
         pub plugin_count: u8,
-
         // --- Revenue ---
         pub distribution_policy: DistributionPolicy,
         pub current_epoch: u64,
@@ -75,13 +72,11 @@ pub mod GuildComponent {
         pub role_member_count: Map<u8, u32>,
         pub member_last_claimed_epoch: Map<ContractAddress, u64>,
         pub shareholder_last_claimed_epoch: Map<ContractAddress, u64>,
-
         // --- Share Offerings ---
         pub active_offer: ShareOffer,
         pub has_active_offer: bool,
         pub redemption_window: RedemptionWindow,
         pub member_last_redemption_epoch: Map<ContractAddress, u64>,
-
         // --- Lifecycle ---
         pub is_dissolved: bool,
     }
@@ -250,9 +245,7 @@ pub mod GuildComponent {
         /// Assert that caller is the Governor contract.
         fn only_governor(self: @ComponentState<TContractState>) {
             assert!(
-                get_caller_address() == self.governor_address.read(),
-                "{}",
-                Errors::ONLY_GOVERNOR,
+                get_caller_address() == self.governor_address.read(), "{}", Errors::ONLY_GOVERNOR,
             );
         }
 
@@ -347,7 +340,9 @@ pub mod GuildComponent {
             if old_weight != new_weight {
                 self
                     .total_payout_weight
-                    .write(self.total_payout_weight.read() - old_weight * count + new_weight * count);
+                    .write(
+                        self.total_payout_weight.read() - old_weight * count + new_weight * count,
+                    );
             }
 
             self
@@ -416,15 +411,20 @@ pub mod GuildComponent {
                 IERC20Dispatcher { contract_address: token }.approve(target, amount);
             } else if action_type == ActionType::EXECUTE {
                 let mut execute_calldata = calldata;
-                let selector: felt252 = Serde::deserialize(ref execute_calldata).expect(
-                    'Missing selector',
-                );
-                syscalls::call_contract_syscall(target, selector, execute_calldata).unwrap_syscall();
+                let selector: felt252 = Serde::deserialize(ref execute_calldata)
+                    .expect('Missing selector');
+                syscalls::call_contract_syscall(target, selector, execute_calldata)
+                    .unwrap_syscall();
             } else {
                 panic_with_felt252(Errors::INVALID_CORE_ACTION);
             }
 
-            self.emit(events::CoreActionExecuted { action_type, target, token, amount, executed_by: caller });
+            self
+                .emit(
+                    events::CoreActionExecuted {
+                        action_type, target, token, amount, executed_by: caller,
+                    },
+                );
         }
 
         fn register_plugin(
@@ -448,19 +448,21 @@ pub mod GuildComponent {
                 .plugins
                 .write(
                     plugin_id,
-                    PluginConfig {
-                        target_contract,
-                        enabled: true,
-                        action_offset,
-                        action_count,
-                    },
+                    PluginConfig { target_contract, enabled: true, action_offset, action_count },
                 );
             self.plugin_count.write(self.plugin_count.read() + 1);
 
-            self.emit(events::PluginRegistered { plugin_id, target_contract, action_offset, action_count });
+            self
+                .emit(
+                    events::PluginRegistered {
+                        plugin_id, target_contract, action_offset, action_count,
+                    },
+                );
         }
 
-        fn toggle_plugin(ref self: ComponentState<TContractState>, plugin_id: felt252, enabled: bool) {
+        fn toggle_plugin(
+            ref self: ComponentState<TContractState>, plugin_id: felt252, enabled: bool,
+        ) {
             self.only_governor();
 
             let mut config = self.plugin_or_panic(plugin_id);
@@ -486,9 +488,13 @@ pub mod GuildComponent {
             let caller = get_caller_address();
             self.check_permission(caller, action_bit, 0);
 
-            syscalls::call_contract_syscall(config.target_contract, selector, calldata).unwrap_syscall();
+            syscalls::call_contract_syscall(config.target_contract, selector, calldata)
+                .unwrap_syscall();
 
-            self.emit(events::PluginActionExecuted { plugin_id, action_index, executed_by: caller });
+            self
+                .emit(
+                    events::PluginActionExecuted { plugin_id, action_index, executed_by: caller },
+                );
         }
 
         fn ponzi_buy_land(
@@ -531,7 +537,8 @@ pub mod GuildComponent {
             assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
             assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
 
-            IPonziLandActionsDispatcher { contract_address: config.target_contract }.claim(land_location);
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }
+                .claim(land_location);
         }
 
         fn ponzi_increase_stake(
@@ -580,7 +587,8 @@ pub mod GuildComponent {
         fn set_revenue_token(ref self: ComponentState<TContractState>, token: ContractAddress) {
             self.only_governor();
             self.revenue_token.write(token);
-            let balance = IERC20Dispatcher { contract_address: token }.balance_of(get_contract_address());
+            let balance = IERC20Dispatcher { contract_address: token }
+                .balance_of(get_contract_address());
             self.revenue_balance_checkpoint.write(balance);
         }
 
@@ -591,9 +599,7 @@ pub mod GuildComponent {
             let revenue_token = self.revenue_token.read();
             assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
 
-            let current_balance = IERC20Dispatcher {
-                contract_address: revenue_token,
-            }
+            let current_balance = IERC20Dispatcher { contract_address: revenue_token }
                 .balance_of(get_contract_address());
             let checkpoint = self.revenue_balance_checkpoint.read();
             let new_revenue = current_balance - checkpoint;
@@ -652,9 +658,8 @@ pub mod GuildComponent {
             assert!(snapshot.total_payout_weight > 0, "No payout weight");
 
             let role = self.roles.read(member.role_id);
-            let share =
-                (snapshot.player_amount * role.payout_weight.into())
-                    / snapshot.total_payout_weight.into();
+            let share = (snapshot.player_amount * role.payout_weight.into())
+                / snapshot.total_payout_weight.into();
 
             let revenue_token = self.revenue_token.read();
             assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
@@ -695,7 +700,10 @@ pub mod GuildComponent {
             }
 
             self.shareholder_last_claimed_epoch.write(caller, epoch + 1);
-            self.emit(events::ShareholderRevenueClaimed { shareholder: caller, epoch, amount: share });
+            self
+                .emit(
+                    events::ShareholderRevenueClaimed { shareholder: caller, epoch, amount: share },
+                );
         }
 
         fn create_share_offer(ref self: ComponentState<TContractState>, offer: ShareOffer) {
@@ -745,7 +753,8 @@ pub mod GuildComponent {
 
             IERC20Dispatcher { contract_address: offer.deposit_token }
                 .transfer_from(caller, get_contract_address(), cost);
-            IGuildTokenDispatcher { contract_address: self.token_address.read() }.mint(caller, amount);
+            IGuildTokenDispatcher { contract_address: self.token_address.read() }
+                .mint(caller, amount);
 
             offer.minted_so_far = next_minted;
             self.active_offer.write(offer);
@@ -782,19 +791,16 @@ pub mod GuildComponent {
 
             let revenue_token = self.revenue_token.read();
             assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
-            let treasury_balance = IERC20Dispatcher {
-                contract_address: revenue_token,
-            }
+            let treasury_balance = IERC20Dispatcher { contract_address: revenue_token }
                 .balance_of(get_contract_address());
-            let total_supply = IERC20Dispatcher {
-                contract_address: self.token_address.read(),
-            }
+            let total_supply = IERC20Dispatcher { contract_address: self.token_address.read() }
                 .total_supply();
             assert!(total_supply > 0, "No token supply");
 
             let payout = (treasury_balance * amount) / total_supply;
 
-            IGuildTokenDispatcher { contract_address: self.token_address.read() }.burn(caller, amount);
+            IGuildTokenDispatcher { contract_address: self.token_address.read() }
+                .burn(caller, amount);
             IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, payout);
             let checkpoint = self.revenue_balance_checkpoint.read();
             if checkpoint >= payout {
@@ -840,9 +846,7 @@ pub mod GuildComponent {
 
                 let existing_invite = self.pending_invites.read(target);
                 assert!(
-                    existing_invite.invited_by == Zero::zero(),
-                    "{}",
-                    Errors::HAS_PENDING_INVITE,
+                    existing_invite.invited_by == Zero::zero(), "{}", Errors::HAS_PENDING_INVITE,
                 );
 
                 assert!(caller_member.role_id < role_id, "{}", Errors::CANNOT_INVITE_TO_HIGHER);
@@ -850,10 +854,7 @@ pub mod GuildComponent {
             }
 
             let invite = PendingInvite {
-                role_id,
-                invited_by: caller,
-                invited_at: get_block_timestamp(),
-                expires_at,
+                role_id, invited_by: caller, invited_at: get_block_timestamp(), expires_at,
             };
             self.pending_invites.write(target, invite);
 
@@ -873,17 +874,16 @@ pub mod GuildComponent {
 
             let role = self.get_role_or_panic(invite.role_id);
 
-            let member = Member { addr: caller, role_id: invite.role_id, joined_at: get_block_timestamp() };
+            let member = Member {
+                addr: caller, role_id: invite.role_id, joined_at: get_block_timestamp(),
+            };
             self.members.write(caller, member);
             self
                 .pending_invites
                 .write(
                     caller,
                     PendingInvite {
-                        role_id: 0,
-                        invited_by: Zero::zero(),
-                        invited_at: 0,
-                        expires_at: 0,
+                        role_id: 0, invited_by: Zero::zero(), invited_at: 0, expires_at: 0,
                     },
                 );
             self.member_count.write(self.member_count.read() + 1);
@@ -914,7 +914,11 @@ pub mod GuildComponent {
                 let target_member = self.get_member_or_panic(target);
                 let target_role = self.get_role_or_panic(target_member.role_id);
                 assert!(target_role.can_be_kicked, "{}", Errors::TARGET_NOT_KICKABLE);
-                assert!(caller_member.role_id < target_member.role_id, "{}", Errors::CANNOT_KICK_HIGHER_RANK);
+                assert!(
+                    caller_member.role_id < target_member.role_id,
+                    "{}",
+                    Errors::CANNOT_KICK_HIGHER_RANK,
+                );
             }
 
             let target_member = self.get_member_or_panic(target);
@@ -930,9 +934,7 @@ pub mod GuildComponent {
             if role_count > 0 {
                 self.role_member_count.write(target_member.role_id, role_count - 1);
             }
-            self
-                .members
-                .write(target, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
+            self.members.write(target, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
             self.member_count.write(self.member_count.read() - 1);
             if target_member.role_id == 0 {
                 self.founder_count.write(self.founder_count.read() - 1);
@@ -948,11 +950,7 @@ pub mod GuildComponent {
             let member = self.get_member_or_panic(caller);
 
             if member.role_id == 0 {
-                assert!(
-                    self.founder_count.read() > 1,
-                    "{}",
-                    Errors::CANNOT_LEAVE_AS_LAST_FOUNDER,
-                );
+                assert!(self.founder_count.read() > 1, "{}", Errors::CANNOT_LEAVE_AS_LAST_FOUNDER);
             }
 
             let role = self.roles.read(member.role_id);
@@ -968,9 +966,7 @@ pub mod GuildComponent {
                 self.role_member_count.write(member.role_id, role_count - 1);
             }
 
-            self
-                .members
-                .write(caller, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
+            self.members.write(caller, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
             self.member_count.write(self.member_count.read() - 1);
             if member.role_id == 0 {
                 self.founder_count.write(self.founder_count.read() - 1);
@@ -980,9 +976,7 @@ pub mod GuildComponent {
         }
 
         fn change_member_role(
-            ref self: ComponentState<TContractState>,
-            target: ContractAddress,
-            new_role_id: u8,
+            ref self: ComponentState<TContractState>, target: ContractAddress, new_role_id: u8,
         ) {
             self.assert_not_dissolved();
 
@@ -993,7 +987,9 @@ pub mod GuildComponent {
                 let caller_member = self.get_member_or_panic(caller);
                 let caller_role = self.get_role_or_panic(caller_member.role_id);
                 assert!(caller_role.can_promote_depth > 0, "{}", Errors::CALLER_CANNOT_PROMOTE);
-                assert!(new_role_id > caller_member.role_id, "{}", Errors::CANNOT_PROMOTE_TO_HIGHER);
+                assert!(
+                    new_role_id > caller_member.role_id, "{}", Errors::CANNOT_PROMOTE_TO_HIGHER,
+                );
                 assert!(
                     new_role_id <= caller_member.role_id + caller_role.can_promote_depth,
                     "{}",
@@ -1034,10 +1030,7 @@ pub mod GuildComponent {
             self
                 .emit(
                     events::MemberRoleChanged {
-                        member: target,
-                        old_role_id,
-                        new_role_id,
-                        changed_by: caller,
+                        member: target, old_role_id, new_role_id, changed_by: caller,
                     },
                 );
         }
@@ -1058,10 +1051,7 @@ pub mod GuildComponent {
                 .write(
                     target,
                     PendingInvite {
-                        role_id: 0,
-                        invited_by: Zero::zero(),
-                        invited_at: 0,
-                        expires_at: 0,
+                        role_id: 0, invited_by: Zero::zero(), invited_at: 0, expires_at: 0,
                     },
                 );
 

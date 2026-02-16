@@ -238,5 +238,4 @@ pub mod GuildToken {
             self.guild_address.read()
         }
     }
-
 }

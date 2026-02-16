@@ -13,10 +13,24 @@ pub mod GuildGovernor {
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 
     component!(path: GovernorComponent, storage: governor, event: GovernorEvent);
-    component!(path: GovernorSettingsComponent, storage: governor_settings, event: GovernorSettingsEvent);
-    component!(path: GovernorCountingSimpleComponent, storage: governor_counting, event: GovernorCountingEvent);
-    component!(path: GovernorVotesQuorumFractionComponent, storage: governor_votes, event: GovernorVotesEvent);
-    component!(path: GovernorCoreExecutionComponent, storage: governor_execution, event: GovernorExecutionEvent);
+    component!(
+        path: GovernorSettingsComponent, storage: governor_settings, event: GovernorSettingsEvent,
+    );
+    component!(
+        path: GovernorCountingSimpleComponent,
+        storage: governor_counting,
+        event: GovernorCountingEvent,
+    );
+    component!(
+        path: GovernorVotesQuorumFractionComponent,
+        storage: governor_votes,
+        event: GovernorVotesEvent,
+    );
+    component!(
+        path: GovernorCoreExecutionComponent,
+        storage: governor_execution,
+        event: GovernorExecutionEvent,
+    );
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
     // Wire extension traits to their implementations.
@@ -30,10 +44,12 @@ pub mod GuildGovernor {
     impl GovernorImpl = GovernorComponent::GovernorImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl GovernorSettingsAdminImpl = GovernorSettingsComponent::GovernorSettingsAdminImpl<ContractState>;
+    impl GovernorSettingsAdminImpl =
+        GovernorSettingsComponent::GovernorSettingsAdminImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl QuorumFractionImpl = GovernorVotesQuorumFractionComponent::QuorumFractionImpl<ContractState>;
+    impl QuorumFractionImpl =
+        GovernorVotesQuorumFractionComponent::QuorumFractionImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;

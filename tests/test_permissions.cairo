@@ -66,7 +66,9 @@ fn default_founder_role() -> Role {
 fn setup_guild() -> TestState {
     let mut state = COMPONENT_STATE();
     start_cheat_caller_address(test_address(), FOUNDER());
-    state.guild.initializer('TestGuild', 'TG', TOKEN(), GOVERNOR(), FOUNDER(), default_founder_role());
+    state
+        .guild
+        .initializer('TestGuild', 'TG', TOKEN(), GOVERNOR(), FOUNDER(), default_founder_role());
     state
 }
 
@@ -695,5 +697,5 @@ fn test_governor_bypasses_on_dissolved_guild() {
     // Let's verify:
     guild_storage_mut(ref state).is_dissolved.write(true);
     // Governor should also be blocked
-    // (if this test fails, it means governor bypasses dissolved check — which we don't want)
+// (if this test fails, it means governor bypasses dissolved check — which we don't want)
 }
