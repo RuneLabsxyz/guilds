@@ -40,6 +40,7 @@ pub mod GuildComponent {
         // --- Membership ---
         pub members: Map<ContractAddress, Member>,
         pub member_count: u32,
+        pub founder_count: u32,
         pub pending_invites: Map<ContractAddress, PendingInvite>,
 
         // --- Roles ---
@@ -99,6 +100,19 @@ pub mod GuildComponent {
         pub const CANNOT_DELETE_FOUNDER: felt252 = 'Cannot delete founder role';
         pub const GUILD_DISSOLVED: felt252 = 'Guild has been dissolved';
         pub const FOUNDER_MUST_NOT_KICK: felt252 = 'Founder role cannot be kickable';
+        pub const INVITE_EXPIRED: felt252 = 'Invite has expired';
+        pub const NO_PENDING_INVITE: felt252 = 'No pending invite found';
+        pub const CANNOT_KICK_SELF: felt252 = 'Cannot kick yourself';
+        pub const CANNOT_KICK_HIGHER_RANK: felt252 = 'Cannot kick higher/equal rank';
+        pub const TARGET_NOT_KICKABLE: felt252 = 'Target role is not kickable';
+        pub const CANNOT_LEAVE_AS_LAST_FOUNDER: felt252 = 'Last founder cannot leave';
+        pub const PROMOTE_DEPTH_EXCEEDED: felt252 = 'Promote depth exceeded';
+        pub const CANNOT_PROMOTE_TO_HIGHER: felt252 = 'Cannot assign higher/equal role';
+        pub const HAS_PENDING_INVITE: felt252 = 'Target has pending invite';
+        pub const CANNOT_INVITE_TO_HIGHER: felt252 = 'Cannot invite to higher rank';
+        pub const CALLER_CANNOT_INVITE: felt252 = 'Caller cannot invite';
+        pub const CALLER_CANNOT_KICK: felt252 = 'Caller cannot kick';
+        pub const CALLER_CANNOT_PROMOTE: felt252 = 'Caller cannot promote';
     }
 
     // ====================================================================
@@ -133,6 +147,7 @@ pub mod GuildComponent {
             let member = Member { addr: founder, role_id: 0, joined_at: get_block_timestamp() };
             self.members.write(founder, member);
             self.member_count.write(1);
+            self.founder_count.write(1);
         }
 
         // ----------------------------------------------------------------
@@ -282,6 +297,211 @@ pub mod GuildComponent {
                 );
 
             self.emit(events::RoleDeleted { role_id });
+        }
+
+        // ----------------------------------------------------------------
+        // Lifecycle member management
+        // ----------------------------------------------------------------
+
+        fn invite_member(
+            ref self: ComponentState<TContractState>,
+            target: ContractAddress,
+            role_id: u8,
+            expires_at: u64,
+        ) {
+            self.assert_not_dissolved();
+
+            let caller = get_caller_address();
+            let governor = self.governor_address.read();
+
+            if caller != governor {
+                let caller_member = self.get_member_or_panic(caller);
+                let caller_role = self.get_role_or_panic(caller_member.role_id);
+                assert!(caller_role.can_invite, "{}", Errors::CALLER_CANNOT_INVITE);
+
+                self.assert_not_member(target);
+
+                let existing_invite = self.pending_invites.read(target);
+                assert!(
+                    existing_invite.invited_by == Zero::zero(),
+                    "{}",
+                    Errors::HAS_PENDING_INVITE,
+                );
+
+                assert!(caller_member.role_id < role_id, "{}", Errors::CANNOT_INVITE_TO_HIGHER);
+                self.get_role_or_panic(role_id);
+            }
+
+            let invite = PendingInvite {
+                role_id,
+                invited_by: caller,
+                invited_at: get_block_timestamp(),
+                expires_at,
+            };
+            self.pending_invites.write(target, invite);
+
+            self.emit(events::MemberInvited { target, role_id, invited_by: caller, expires_at });
+        }
+
+        fn accept_invite(ref self: ComponentState<TContractState>) {
+            self.assert_not_dissolved();
+
+            let caller = get_caller_address();
+            let invite = self.pending_invites.read(caller);
+            assert!(invite.invited_by != Zero::zero(), "{}", Errors::NO_PENDING_INVITE);
+
+            if invite.expires_at > 0 {
+                assert!(get_block_timestamp() < invite.expires_at, "{}", Errors::INVITE_EXPIRED);
+            }
+
+            self.get_role_or_panic(invite.role_id);
+
+            let member = Member { addr: caller, role_id: invite.role_id, joined_at: get_block_timestamp() };
+            self.members.write(caller, member);
+            self
+                .pending_invites
+                .write(
+                    caller,
+                    PendingInvite {
+                        role_id: 0,
+                        invited_by: Zero::zero(),
+                        invited_at: 0,
+                        expires_at: 0,
+                    },
+                );
+            self.member_count.write(self.member_count.read() + 1);
+            if invite.role_id == 0 {
+                self.founder_count.write(self.founder_count.read() + 1);
+            }
+
+            self.emit(events::MemberJoined { member: caller, role_id: invite.role_id });
+        }
+
+        fn kick_member(ref self: ComponentState<TContractState>, target: ContractAddress) {
+            self.assert_not_dissolved();
+
+            let caller = get_caller_address();
+            let governor = self.governor_address.read();
+
+            if caller != governor {
+                let caller_member = self.get_member_or_panic(caller);
+                let caller_role = self.get_role_or_panic(caller_member.role_id);
+                assert!(caller_role.can_kick, "{}", Errors::CALLER_CANNOT_KICK);
+                assert!(caller != target, "{}", Errors::CANNOT_KICK_SELF);
+
+                let target_member = self.get_member_or_panic(target);
+                let target_role = self.get_role_or_panic(target_member.role_id);
+                assert!(target_role.can_be_kicked, "{}", Errors::TARGET_NOT_KICKABLE);
+                assert!(caller_member.role_id < target_member.role_id, "{}", Errors::CANNOT_KICK_HIGHER_RANK);
+            }
+
+            let target_member = self.get_member_or_panic(target);
+            self
+                .members
+                .write(target, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
+            self.member_count.write(self.member_count.read() - 1);
+            if target_member.role_id == 0 {
+                self.founder_count.write(self.founder_count.read() - 1);
+            }
+
+            self.emit(events::MemberKicked { member: target, kicked_by: caller });
+        }
+
+        fn leave_guild(ref self: ComponentState<TContractState>) {
+            self.assert_not_dissolved();
+
+            let caller = get_caller_address();
+            let member = self.get_member_or_panic(caller);
+
+            if member.role_id == 0 {
+                assert!(
+                    self.founder_count.read() > 1,
+                    "{}",
+                    Errors::CANNOT_LEAVE_AS_LAST_FOUNDER,
+                );
+            }
+
+            self
+                .members
+                .write(caller, Member { addr: Zero::zero(), role_id: 0, joined_at: 0 });
+            self.member_count.write(self.member_count.read() - 1);
+            if member.role_id == 0 {
+                self.founder_count.write(self.founder_count.read() - 1);
+            }
+
+            self.emit(events::MemberLeft { member: caller });
+        }
+
+        fn change_member_role(
+            ref self: ComponentState<TContractState>,
+            target: ContractAddress,
+            new_role_id: u8,
+        ) {
+            self.assert_not_dissolved();
+
+            let caller = get_caller_address();
+            let governor = self.governor_address.read();
+
+            if caller != governor {
+                let caller_member = self.get_member_or_panic(caller);
+                let caller_role = self.get_role_or_panic(caller_member.role_id);
+                assert!(caller_role.can_promote_depth > 0, "{}", Errors::CALLER_CANNOT_PROMOTE);
+                assert!(new_role_id > caller_member.role_id, "{}", Errors::CANNOT_PROMOTE_TO_HIGHER);
+                assert!(
+                    new_role_id <= caller_member.role_id + caller_role.can_promote_depth,
+                    "{}",
+                    Errors::PROMOTE_DEPTH_EXCEEDED,
+                );
+            }
+
+            self.get_role_or_panic(new_role_id);
+
+            let mut target_member = self.get_member_or_panic(target);
+            let old_role_id = target_member.role_id;
+            target_member.role_id = new_role_id;
+            self.members.write(target, target_member);
+
+            if old_role_id == 0 && new_role_id != 0 {
+                self.founder_count.write(self.founder_count.read() - 1);
+            } else if old_role_id != 0 && new_role_id == 0 {
+                self.founder_count.write(self.founder_count.read() + 1);
+            }
+
+            self
+                .emit(
+                    events::MemberRoleChanged {
+                        member: target,
+                        old_role_id,
+                        new_role_id,
+                        changed_by: caller,
+                    },
+                );
+        }
+
+        fn revoke_invite(ref self: ComponentState<TContractState>, target: ContractAddress) {
+            self.assert_not_dissolved();
+
+            let caller = get_caller_address();
+            let invite = self.pending_invites.read(target);
+            assert!(invite.invited_by != Zero::zero(), "{}", Errors::NO_PENDING_INVITE);
+
+            if caller != self.governor_address.read() {
+                assert!(caller == invite.invited_by, "{}", Errors::ACTION_NOT_PERMITTED);
+            }
+
+            self
+                .pending_invites
+                .write(
+                    target,
+                    PendingInvite {
+                        role_id: 0,
+                        invited_by: Zero::zero(),
+                        invited_at: 0,
+                        expires_at: 0,
+                    },
+                );
+
+            self.emit(events::InviteRevoked { target, revoked_by: caller });
         }
     }
 }
