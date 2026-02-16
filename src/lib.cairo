@@ -38,6 +38,11 @@ pub mod token {
     pub mod guild_token;
 }
 
+pub mod governor {
+    pub mod guild_governor;
+}
+
+// Keep v0.1 for backward compatibility during migration
 pub mod gov {
     pub mod governance;
 }
