@@ -1,371 +1,287 @@
-use core::array::Array;
 use core::num::traits::Zero;
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
-use starknet::{ContractAddress, get_caller_address};
+use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
 
-#[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
-pub struct Member {
-    pub addr: ContractAddress,
-    pub rank_id: u8,
-    pub is_creator: bool,
-}
-
-#[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
-pub struct Rank {
-    pub rank_name: felt252,
-    pub can_invite: bool,
-    pub can_kick: bool,
-    pub promote: u8,
-    pub can_be_kicked: bool,
-}
-
+/// Guild Component v0.2
+///
+/// Core component for guild membership, roles, and permissions.
+/// Uses bitmask-based permission system where each role has an `allowed_actions: u32`
+/// field encoding which actions members of that role can perform.
+///
+/// The Governor contract is the sole admin — no owner key exists.
+/// Role management (create/modify/delete) is governor-only.
+/// Membership management (invite/kick/promote) is permission-based.
 #[starknet::component]
 pub mod GuildComponent {
-    use crate::guild::interface;
-    use super::{*, StoragePointerReadAccess};
+    use guilds::models::events;
+    use guilds::models::types::{
+        DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
+        Role, ShareOffer,
+    };
+    use super::*;
 
-    const DUMMY_TOKEN_ADDRESS: ContractAddress = 0xDEADBEEF.try_into().unwrap();
+    // ====================================================================
+    // Storage
+    // ====================================================================
 
     #[storage]
     pub struct Storage {
+        // --- Identity ---
         pub guild_name: felt252,
-        pub owner: ContractAddress,
+        pub guild_ticker: felt252,
+
+        // --- Cross-contract references ---
         pub token_address: ContractAddress,
+        pub governor_address: ContractAddress,
+
+        // --- Membership ---
         pub members: Map<ContractAddress, Member>,
-        pub ranks: Map<u8, Rank>,
-        pub rank_count: u8,
-        pub pending_invites: Map<ContractAddress, u8>,
+        pub member_count: u32,
+        pub pending_invites: Map<ContractAddress, PendingInvite>,
+
+        // --- Roles ---
+        pub roles: Map<u8, Role>,
+        pub role_count: u8,
+
+        // --- Plugins ---
+        pub plugins: Map<felt252, PluginConfig>,
+        pub plugin_count: u8,
+
+        // --- Revenue ---
+        pub distribution_policy: DistributionPolicy,
+        pub current_epoch: u64,
+        pub epoch_snapshots: Map<u64, EpochSnapshot>,
+        pub member_last_claimed_epoch: Map<ContractAddress, u64>,
+        pub shareholder_last_claimed_epoch: Map<ContractAddress, u64>,
+
+        // --- Share Offerings ---
+        pub active_offer: ShareOffer,
+        pub has_active_offer: bool,
+        pub redemption_window: RedemptionWindow,
+        pub member_last_redemption_epoch: Map<ContractAddress, u64>,
+
+        // --- Lifecycle ---
+        pub is_dissolved: bool,
     }
 
-    #[embeddable_as(GuildImpl)]
-    impl Guild<
-        TContractState, +HasComponent<TContractState>,
-    > of interface::IGuild<ComponentState<TContractState>> {
-        fn invite_member(
-            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: Option<u8>,
-        ) {
-            self._only_inviter();
-            self._validate_not_member(member);
-            let inviter_rank_id = self._get_member_rank_id();
-            let target_rank_id = self._resolve_target_rank_id(rank_id);
-            self._validate_rank_higher(inviter_rank_id, target_rank_id);
-            self._add_pending_invite(member, target_rank_id);
-        }
+    // ====================================================================
+    // Events
+    // ====================================================================
 
-        fn kick_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
-            self._validate_member(member);
-            self._only_kicker(member);
-            self._remove_member(member);
-        }
-
-        fn create_rank(
-            ref self: ComponentState<TContractState>,
-            rank_name: felt252,
-            can_invite: bool,
-            can_kick: bool,
-            promote: u8,
-            can_be_kicked: bool,
-        ) {
-            self._only_owner();
-            self._create_rank(rank_name, can_invite, can_kick, promote, can_be_kicked);
-        }
-
-        fn delete_rank(ref self: ComponentState<TContractState>, rank_id: u8) {
-            self._only_owner();
-            self._delete_rank(rank_id);
-        }
-
-        fn change_rank_permissions(
-            ref self: ComponentState<TContractState>,
-            rank_id: u8,
-            can_invite: bool,
-            can_kick: bool,
-            promote: u8,
-            can_be_kicked: bool,
-        ) {
-            self._only_owner();
-            self._change_rank_permissions(rank_id, can_invite, can_kick, promote, can_be_kicked);
-        }
-
-        /// Accept an invite to join the guild (must be called by the invited address)
-        fn accept_invite(ref self: ComponentState<TContractState>) {
-            let caller = get_caller_address();
-            self._validate_pending_invite(caller);
-            let rank_id = self.pending_invites.read(caller);
-            self._add_member_with_rank(caller, rank_id);
-            self._clear_pending_invite(caller);
-        }
-
-        fn promote_member(
-            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
-        ) {
-            let caller = get_caller_address();
-            let caller_rank_id = self._get_member_rank_id();
-            self._validate_member(caller);
-            self._validate_member(member);
-            self._validate_rank_higher(caller_rank_id, rank_id);
-            self._promote_member(member, rank_id);
-        }
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    pub enum Event {
+        RoleCreated: events::RoleCreated,
+        RoleModified: events::RoleModified,
+        RoleDeleted: events::RoleDeleted,
+        MemberInvited: events::MemberInvited,
+        MemberJoined: events::MemberJoined,
+        MemberKicked: events::MemberKicked,
+        MemberLeft: events::MemberLeft,
+        MemberRoleChanged: events::MemberRoleChanged,
+        InviteRevoked: events::InviteRevoked,
     }
 
-    #[embeddable_as(GuildMetadataImpl)]
-    impl GuildMetaData<
-        TContractState, +HasComponent<TContractState>,
-    > of interface::IGuildMetadata<ComponentState<TContractState>> {
-        fn get_guild_name(self: @ComponentState<TContractState>) -> felt252 {
-            self.guild_name.read()
-        }
+    // ====================================================================
+    // Errors
+    // ====================================================================
 
-        fn get_owner(self: @ComponentState<TContractState>) -> ContractAddress {
-            self.owner.read()
-        }
-
-        fn max_rank(self: @ComponentState<TContractState>) -> u8 {
-            self.rank_count.read()
-        }
-
-        fn get_rank_permissions(ref self: ComponentState<TContractState>) -> Array<Rank> {
-            let mut ranks_array = ArrayTrait::new();
-            let rank_count = self.rank_count.read();
-            let mut i = 0_u8;
-            while i != rank_count {
-                let rank = self.ranks.read(i);
-                ranks_array.append(rank);
-                i = i + 1_u8;
-            }
-            ranks_array
-        }
-
-        fn get_token_address(self: @ComponentState<TContractState>) -> ContractAddress {
-            self.token_address.read()
-        }
+    pub mod Errors {
+        pub const NOT_A_MEMBER: felt252 = 'Not a guild member';
+        pub const ALREADY_A_MEMBER: felt252 = 'Already a guild member';
+        pub const ACTION_NOT_PERMITTED: felt252 = 'Action not permitted for role';
+        pub const EXCEEDS_SPENDING_LIMIT: felt252 = 'Exceeds spending limit';
+        pub const ONLY_GOVERNOR: felt252 = 'Only governor can do this';
+        pub const ROLE_NOT_FOUND: felt252 = 'Role does not exist';
+        pub const CANNOT_DELETE_FOUNDER: felt252 = 'Cannot delete founder role';
+        pub const GUILD_DISSOLVED: felt252 = 'Guild has been dissolved';
+        pub const FOUNDER_MUST_NOT_KICK: felt252 = 'Founder role cannot be kickable';
     }
+
+    // ====================================================================
+    // Internal Implementation
+    // ====================================================================
 
     #[generate_trait]
-    pub impl InternalImpl<TContractState> of InternalTrait<TContractState> {
+    pub impl InternalImpl<
+        TContractState, +HasComponent<TContractState>,
+    > of InternalTrait<TContractState> {
+        /// Initialize the guild component.
+        /// Creates the founder role (role 0) and registers the founder as first member.
         fn initializer(
             ref self: ComponentState<TContractState>,
             guild_name: felt252,
-            rank_name: felt252,
-            token_address: Option<ContractAddress>,
+            guild_ticker: felt252,
+            token_address: ContractAddress,
+            governor_address: ContractAddress,
+            founder: ContractAddress,
+            founder_role: Role,
         ) {
-            let caller = get_caller_address();
             self.guild_name.write(guild_name);
-            self.owner.write(caller);
-            let creator = Member { addr: caller, rank_id: 0, is_creator: true };
-            let rank = Rank {
-                rank_name, can_invite: true, can_kick: true, promote: 1, can_be_kicked: false,
-            };
-            self.ranks.write(0, rank);
-            self.members.write(caller, creator);
-            self.rank_count.write(1_u8);
-            let token_addr = match token_address {
-                Option::Some(addr) => addr,
-                Option::None => DUMMY_TOKEN_ADDRESS,
-            };
-            self.token_address.write(token_addr);
+            self.guild_ticker.write(guild_ticker);
+            self.token_address.write(token_address);
+            self.governor_address.write(governor_address);
+
+            // Create founder role as role 0
+            self.roles.write(0, founder_role);
+            self.role_count.write(1);
+
+            // Register founder as first member
+            let member = Member { addr: founder, role_id: 0, joined_at: get_block_timestamp() };
+            self.members.write(founder, member);
+            self.member_count.write(1);
         }
 
-        /// Internal: Add a member to the guild with a specific rank
-        fn _add_member_with_rank(
-            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
+        // ----------------------------------------------------------------
+        // Permission checks
+        // ----------------------------------------------------------------
+
+        /// Single permission gate: checks that caller is a member, their role
+        /// has the requested action bit set, and the amount is within spending
+        /// limit.
+        ///
+        /// The Governor always bypasses this check.
+        fn check_permission(
+            self: @ComponentState<TContractState>,
+            caller: ContractAddress,
+            action: u32,
+            amount: u256,
         ) {
-            let new_member = Member { addr: member, rank_id, is_creator: false };
-            self.members.write(member, new_member);
+            self.assert_not_dissolved();
+
+            // Governor bypasses all permission checks
+            if caller == self.governor_address.read() {
+                return;
+            }
+
+            let member = self.members.read(caller);
+            assert!(member.addr != Zero::zero(), "{}", Errors::NOT_A_MEMBER);
+
+            let role = self.roles.read(member.role_id);
+
+            // Check action bitmask
+            assert!(role.allowed_actions & action != 0, "{}", Errors::ACTION_NOT_PERMITTED);
+
+            // Check spending limit (only for non-zero amounts)
+            if amount > 0 {
+                assert!(amount <= role.spending_limit, "{}", Errors::EXCEEDS_SPENDING_LIMIT);
+            }
         }
 
-        /// Internal: Validate that a rank exists
-        fn _validate_rank_exists(self: @ComponentState<TContractState>, rank_id: u8) {
-            let rank = self.ranks.read(rank_id);
-            assert!(rank.rank_name != 0, "Rank does not exist");
+        /// Assert that caller is the Governor contract.
+        fn only_governor(self: @ComponentState<TContractState>) {
+            assert!(
+                get_caller_address() == self.governor_address.read(),
+                "{}",
+                Errors::ONLY_GOVERNOR,
+            );
         }
 
-        /// Internal: Validate member's rank is higher than the target's
-        fn _validate_rank_higher(
-            self: @ComponentState<TContractState>, member_rank_id: u8, target_rank_id: u8,
-        ) {
-            assert!(member_rank_id < target_rank_id, "Can only promote to a lower rank");
+        /// Assert guild is not dissolved.
+        fn assert_not_dissolved(self: @ComponentState<TContractState>) {
+            assert!(!self.is_dissolved.read(), "{}", Errors::GUILD_DISSOLVED);
         }
 
-        /// Internal: Add a member to the guild (default to lowest rank, for backward compatibility)
-        fn _add_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
-            let rank_id = self.rank_count.read() - 1;
-            self._add_member_with_rank(member, rank_id);
+        /// Get a member, asserting they exist. Returns the Member struct.
+        fn get_member_or_panic(
+            self: @ComponentState<TContractState>, addr: ContractAddress,
+        ) -> Member {
+            let member = self.members.read(addr);
+            assert!(member.addr != Zero::zero(), "{}", Errors::NOT_A_MEMBER);
+            member
         }
 
-        /// Internal: Remove a member from the guild
-        fn _remove_member(ref self: ComponentState<TContractState>, member: ContractAddress) {
+        /// Assert that an address is NOT a member (for invite validation).
+        fn assert_not_member(self: @ComponentState<TContractState>, addr: ContractAddress) {
+            let member = self.members.read(addr);
+            assert!(member.addr == Zero::zero(), "{}", Errors::ALREADY_A_MEMBER);
+        }
+
+        /// Get a role, asserting it exists (not deleted). Returns the Role.
+        fn get_role_or_panic(self: @ComponentState<TContractState>, role_id: u8) -> Role {
+            assert!(role_id < self.role_count.read(), "{}", Errors::ROLE_NOT_FOUND);
+            let role = self.roles.read(role_id);
+            // name == 0 means the role was deleted
+            assert!(role.name != 0, "{}", Errors::ROLE_NOT_FOUND);
+            role
+        }
+
+        // ----------------------------------------------------------------
+        // Role management (governor-only)
+        // ----------------------------------------------------------------
+
+        /// Create a new role. Returns the assigned role_id.
+        fn create_role(ref self: ComponentState<TContractState>, role: Role) -> u8 {
+            self.only_governor();
+
+            let role_id = self.role_count.read();
+            self.roles.write(role_id, role);
+            self.role_count.write(role_id + 1);
+
             self
-                .members
-                .write(member, Member { addr: Zero::zero(), rank_id: 0, is_creator: false });
+                .emit(
+                    events::RoleCreated {
+                        role_id,
+                        name: role.name,
+                        allowed_actions: role.allowed_actions,
+                        spending_limit: role.spending_limit,
+                    },
+                );
+
+            role_id
         }
 
-        /// Internal: Create a new rank
-        fn _create_rank(
-            ref self: ComponentState<TContractState>,
-            rank_name: felt252,
-            can_invite: bool,
-            can_kick: bool,
-            promote: u8,
-            can_be_kicked: bool,
-        ) {
-            let rank_id = self.rank_count.read();
-            let new_rank = Rank { rank_name, can_invite, can_kick, promote, can_be_kicked };
-            self.ranks.write(rank_id, new_rank);
-            self.rank_count.write(rank_id + 1_u8);
-        }
+        /// Modify an existing role.
+        /// Founder role (0) must always have can_be_kicked = false.
+        fn modify_role(ref self: ComponentState<TContractState>, role_id: u8, role: Role) {
+            self.only_governor();
+            self.get_role_or_panic(role_id);
 
-        /// Internal: Delete a rank
-        fn _delete_rank(ref self: ComponentState<TContractState>, rank_id: u8) {
-            assert!(rank_id != 0, "Cannot delete the creator's rank");
+            // Founder role must never be kickable
+            if role_id == 0 {
+                assert!(!role.can_be_kicked, "{}", Errors::FOUNDER_MUST_NOT_KICK);
+            }
+
+            self.roles.write(role_id, role);
+
             self
-                .ranks
-                .write(
-                    rank_id,
-                    Rank {
-                        rank_name: 0,
-                        can_invite: false,
-                        can_kick: false,
-                        promote: 0,
-                        can_be_kicked: false,
+                .emit(
+                    events::RoleModified {
+                        role_id,
+                        name: role.name,
+                        allowed_actions: role.allowed_actions,
+                        spending_limit: role.spending_limit,
                     },
                 );
         }
 
-        /// Internal: Change rank permissions
-        fn _change_rank_permissions(
-            ref self: ComponentState<TContractState>,
-            rank_id: u8,
-            can_invite: bool,
-            can_kick: bool,
-            promote: u8,
-            can_be_kicked: bool,
-        ) {
-            let mut rank = self.ranks.read(rank_id);
-            rank.can_invite = can_invite;
-            rank.can_kick = can_kick;
-            rank.promote = promote;
-            rank.can_be_kicked = can_be_kicked;
-            self.ranks.write(rank_id, rank);
-        }
+        /// Delete a role by zeroing it out. Cannot delete role 0 (founder).
+        fn delete_role(ref self: ComponentState<TContractState>, role_id: u8) {
+            self.only_governor();
+            assert!(role_id != 0, "{}", Errors::CANNOT_DELETE_FOUNDER);
+            self.get_role_or_panic(role_id);
 
-        /// Internal: Ensure caller is the owner
-        fn _only_owner(self: @ComponentState<TContractState>) {
-            assert!(
-                get_caller_address() == self.owner.read(), "Only owner can perform this action",
-            );
-        }
+            // Zero out the role (name = 0 marks it as deleted)
+            self
+                .roles
+                .write(
+                    role_id,
+                    Role {
+                        name: 0,
+                        can_invite: false,
+                        can_kick: false,
+                        can_promote_depth: 0,
+                        can_be_kicked: false,
+                        allowed_actions: 0,
+                        spending_limit: 0,
+                        payout_weight: 0,
+                    },
+                );
 
-        /// Internal: Ensure caller can invite
-        fn _only_inviter(ref self: ComponentState<TContractState>) {
-            let caller = get_caller_address();
-            if caller == self.owner.read() {
-                return;
-            }
-            let member = self.members.read(caller);
-            assert!(member.addr != Zero::zero(), "Caller is not a guild member");
-            let rank = self.ranks.read(member.rank_id);
-            assert!(rank.can_invite, "Caller does not have permission to invite");
-        }
-
-        fn _only_kicker(ref self: ComponentState<TContractState>, target: ContractAddress) {
-            let caller = get_caller_address();
-
-            assert!(caller != target, "Target member cannot be kicked");
-
-            if caller == self.owner.read() {
-                return;
-            }
-
-            let member = self.members.read(caller);
-            assert!(member.addr != Zero::zero(), "Caller is not a guild member");
-
-            let rank = self.ranks.read(member.rank_id);
-            assert!(rank.can_kick, "Caller does not have permission to kick");
-
-            let target_member = self.members.read(target);
-            let target_rank = self.ranks.read(target_member.rank_id);
-            assert!(target_rank.can_be_kicked, "Target member cannot be kicked");
-
-            // Prevent kicking same or higher rank (lower rank_id = higher rank)
-            assert!(
-                member.rank_id < target_member.rank_id,
-                "Cannot kick member with same or higher rank",
-            );
-        }
-
-        /// Internal: Validate that an address is not already a member
-        fn _validate_not_member(self: @ComponentState<TContractState>, member: ContractAddress) {
-            let member = self.members.read(member);
-            assert!(member.addr == Zero::zero(), "Member already exists in the guild");
-        }
-
-        fn _validate_member(self: @ComponentState<TContractState>, member: ContractAddress) {
-            let member = self.members.read(member);
-            assert!(member.addr != Zero::zero(), "Target member does not exist in the guild");
-        }
-
-        /// Internal: Get the member's rank id (owner is always rank 0)
-        fn _get_member_rank_id(self: @ComponentState<TContractState>) -> u8 {
-            let member = get_caller_address();
-            if member == self.owner.read() {
-                0_u8
-            } else {
-                let member_data = self.members.read(member);
-                member_data.rank_id
-            }
-        }
-
-        /// Internal: Resolve the target rank id from Option<u8>, defaulting to lowest
-        fn _resolve_target_rank_id(
-            self: @ComponentState<TContractState>, rank_id: Option<u8>,
-        ) -> u8 {
-            match rank_id {
-                Option::Some(id) => {
-                    self._validate_rank_exists(id);
-                    id
-                },
-                Option::None => self.rank_count.read() - 1_u8,
-            }
-        }
-
-        /// Internal: Add a pending invite
-        fn _add_pending_invite(
-            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
-        ) {
-            self.pending_invites.write(member, rank_id);
-        }
-
-        /// Internal: Validate that an address has a pending invite
-        fn _validate_pending_invite(
-            self: @ComponentState<TContractState>, member: ContractAddress,
-        ) {
-            let rank_id = self.pending_invites.read(member);
-            assert!(
-                rank_id != 0_u8 || self.rank_count.read() == 1_u8,
-                "No pending invite for this address",
-            );
-        }
-
-        /// Internal: Clear a pending invite
-        fn _clear_pending_invite(
-            ref self: ComponentState<TContractState>, member: ContractAddress,
-        ) {
-            self.pending_invites.write(member, 0_u8);
-        }
-
-        /// Internal: Promote a member to a new rank
-        fn _promote_member(
-            ref self: ComponentState<TContractState>, member: ContractAddress, rank_id: u8,
-        ) {
-            self._validate_member(member);
-            self._validate_rank_exists(rank_id);
-            let mut member_data = self.members.read(member);
-            member_data.rank_id = rank_id;
-            self.members.write(member, member_data);
+            self.emit(events::RoleDeleted { role_id });
         }
     }
 }

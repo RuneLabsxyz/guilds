@@ -20,7 +20,6 @@ pub mod interfaces {
 
 pub mod guild {
     pub mod guild_contract;
-    pub mod interface;
 }
 
 pub mod mocks {

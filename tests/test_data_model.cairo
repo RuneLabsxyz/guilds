@@ -1,4 +1,3 @@
-use core::num::traits::Zero;
 use guilds::models::constants::{
     ActionType, BPS_DENOMINATOR, DEFAULT_PLAYER_BPS, DEFAULT_SHAREHOLDER_BPS, DEFAULT_TREASURY_BPS,
 };
@@ -9,11 +8,11 @@ use guilds::models::types::{
 use starknet::ContractAddress;
 
 fn ADDR_1() -> ContractAddress {
-    starknet::contract_address_const::<0x1>()
+    0x1.try_into().unwrap()
 }
 
 fn ADDR_2() -> ContractAddress {
-    starknet::contract_address_const::<0x2>()
+    0x2.try_into().unwrap()
 }
 
 // ========================================================================
