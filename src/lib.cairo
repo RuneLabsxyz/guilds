@@ -34,6 +34,10 @@ pub mod erc20 {
     pub mod erc20_token;
 }
 
+pub mod token {
+    pub mod guild_token;
+}
+
 pub mod gov {
     pub mod governance;
 }

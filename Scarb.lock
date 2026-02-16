@@ -6,6 +6,7 @@ name = "guilds"
 version = "0.1.0"
 dependencies = [
  "openzeppelin_governance",
+ "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
  "openzeppelin_utils",
