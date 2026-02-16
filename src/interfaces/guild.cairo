@@ -52,8 +52,26 @@ pub trait IGuild<TState> {
 
     /// Execute a plugin action (game-specific).
     fn execute_plugin_action(
-        ref self: TState, plugin_id: felt252, action_index: u8, calldata: Span<felt252>,
+        ref self: TState,
+        plugin_id: felt252,
+        action_index: u8,
+        selector: felt252,
+        calldata: Span<felt252>,
     );
+
+    // --- PonziLand Convenience ---
+
+    fn ponzi_buy_land(
+        ref self: TState,
+        land_location: u16,
+        token_for_sale: ContractAddress,
+        sell_price: u256,
+        amount_to_stake: u256,
+    );
+    fn ponzi_set_price(ref self: TState, land_location: u16, new_price: u256);
+    fn ponzi_claim_yield(ref self: TState, land_location: u16);
+    fn ponzi_increase_stake(ref self: TState, land_location: u16, amount_to_stake: u256);
+    fn ponzi_withdraw_stake(ref self: TState, land_location: u16);
 
     // --- Plugin Management (Governor only) ---
 

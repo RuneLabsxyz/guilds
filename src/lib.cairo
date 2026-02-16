@@ -12,6 +12,7 @@ pub mod interfaces {
     pub mod guild;
     pub mod token;
     pub mod factory;
+    pub mod ponziland;
 }
 
 // ========================================================================
@@ -20,10 +21,12 @@ pub mod interfaces {
 
 pub mod guild {
     pub mod guild_contract;
+    pub mod guild;
 }
 
 pub mod mocks {
     pub mod guild;
+    pub mod ponziland;
 }
 
 pub mod tests {

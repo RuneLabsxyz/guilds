@@ -1,9 +1,11 @@
 use core::num::traits::Zero;
+use core::panic_with_felt252;
+use core::serde::Serde;
 use starknet::storage::{
     Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
     StoragePointerWriteAccess,
 };
-use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
+use starknet::{ContractAddress, SyscallResultTrait, get_block_timestamp, get_caller_address};
 
 /// Guild Component v0.2
 ///
@@ -16,11 +18,15 @@ use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
 /// Membership management (invite/kick/promote) is permission-based.
 #[starknet::component]
 pub mod GuildComponent {
+    use guilds::interfaces::ponziland::{IPonziLandActionsDispatcher, IPonziLandActionsDispatcherTrait};
+    use guilds::models::constants::ActionType;
     use guilds::models::events;
     use guilds::models::types::{
         DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
         Role, ShareOffer,
     };
+    use openzeppelin_interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use starknet::syscalls;
     use super::*;
 
     // ====================================================================
@@ -84,6 +90,11 @@ pub mod GuildComponent {
         MemberLeft: events::MemberLeft,
         MemberRoleChanged: events::MemberRoleChanged,
         InviteRevoked: events::InviteRevoked,
+        CoreActionExecuted: events::CoreActionExecuted,
+        PluginActionExecuted: events::PluginActionExecuted,
+        PluginRegistered: events::PluginRegistered,
+        PluginToggled: events::PluginToggled,
+        GuildDissolved: events::GuildDissolved,
     }
 
     // ====================================================================
@@ -113,6 +124,14 @@ pub mod GuildComponent {
         pub const CALLER_CANNOT_INVITE: felt252 = 'Caller cannot invite';
         pub const CALLER_CANNOT_KICK: felt252 = 'Caller cannot kick';
         pub const CALLER_CANNOT_PROMOTE: felt252 = 'Caller cannot promote';
+        pub const PLUGIN_NOT_FOUND: felt252 = 'Plugin does not exist';
+        pub const PLUGIN_DISABLED: felt252 = 'Plugin is disabled';
+        pub const PLUGIN_ALREADY_EXISTS: felt252 = 'Plugin already exists';
+        pub const PLUGIN_ACTION_OUT_OF_RANGE: felt252 = 'Plugin action out of range';
+        pub const PLUGIN_OFFSET_RESERVED: felt252 = 'Offset reserved for core';
+        pub const PLUGIN_OFFSET_OVERFLOW: felt252 = 'Offset+count exceeds bitmask';
+        pub const INVALID_CORE_ACTION: felt252 = 'Invalid core action type';
+        pub const PONZILAND_NOT_REGISTERED: felt252 = 'PonziLand plugin not registered';
     }
 
     // ====================================================================
@@ -224,6 +243,24 @@ pub mod GuildComponent {
             role
         }
 
+        fn plugin_or_panic(
+            self: @ComponentState<TContractState>, plugin_id: felt252,
+        ) -> PluginConfig {
+            let config = self.plugins.read(plugin_id);
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PLUGIN_NOT_FOUND);
+            config
+        }
+
+        fn action_bit_from_position(self: @ComponentState<TContractState>, shift: u8) -> u32 {
+            let mut value: u32 = 1;
+            let mut i: u8 = 0;
+            while i < shift {
+                value = value * 2;
+                i = i + 1;
+            }
+            value
+        }
+
         // ----------------------------------------------------------------
         // Role management (governor-only)
         // ----------------------------------------------------------------
@@ -297,6 +334,177 @@ pub mod GuildComponent {
                 );
 
             self.emit(events::RoleDeleted { role_id });
+        }
+
+        // ----------------------------------------------------------------
+        // Treasury + Plugins
+        // ----------------------------------------------------------------
+
+        fn execute_core_action(
+            ref self: ComponentState<TContractState>,
+            action_type: u32,
+            target: ContractAddress,
+            token: ContractAddress,
+            amount: u256,
+            calldata: Span<felt252>,
+        ) {
+            let caller = get_caller_address();
+            self.check_permission(caller, action_type, amount);
+
+            if action_type == ActionType::TRANSFER {
+                IERC20Dispatcher { contract_address: token }.transfer(target, amount);
+            } else if action_type == ActionType::APPROVE {
+                IERC20Dispatcher { contract_address: token }.approve(target, amount);
+            } else if action_type == ActionType::EXECUTE {
+                let mut execute_calldata = calldata;
+                let selector: felt252 = Serde::deserialize(ref execute_calldata).expect(
+                    'Missing selector',
+                );
+                syscalls::call_contract_syscall(target, selector, execute_calldata).unwrap_syscall();
+            } else {
+                panic_with_felt252(Errors::INVALID_CORE_ACTION);
+            }
+
+            self.emit(events::CoreActionExecuted { action_type, target, token, amount, executed_by: caller });
+        }
+
+        fn register_plugin(
+            ref self: ComponentState<TContractState>,
+            plugin_id: felt252,
+            target_contract: ContractAddress,
+            action_offset: u8,
+            action_count: u8,
+        ) {
+            self.only_governor();
+
+            let existing = self.plugins.read(plugin_id);
+            assert!(existing.target_contract == Zero::zero(), "{}", Errors::PLUGIN_ALREADY_EXISTS);
+
+            let offset_u16: u16 = action_offset.into();
+            let count_u16: u16 = action_count.into();
+            assert!(offset_u16 >= 8, "{}", Errors::PLUGIN_OFFSET_RESERVED);
+            assert!(offset_u16 + count_u16 <= 32, "{}", Errors::PLUGIN_OFFSET_OVERFLOW);
+
+            self
+                .plugins
+                .write(
+                    plugin_id,
+                    PluginConfig {
+                        target_contract,
+                        enabled: true,
+                        action_offset,
+                        action_count,
+                    },
+                );
+            self.plugin_count.write(self.plugin_count.read() + 1);
+
+            self.emit(events::PluginRegistered { plugin_id, target_contract, action_offset, action_count });
+        }
+
+        fn toggle_plugin(ref self: ComponentState<TContractState>, plugin_id: felt252, enabled: bool) {
+            self.only_governor();
+
+            let mut config = self.plugin_or_panic(plugin_id);
+            config.enabled = enabled;
+            self.plugins.write(plugin_id, config);
+
+            self.emit(events::PluginToggled { plugin_id, enabled });
+        }
+
+        fn execute_plugin_action(
+            ref self: ComponentState<TContractState>,
+            plugin_id: felt252,
+            action_index: u8,
+            selector: felt252,
+            calldata: Span<felt252>,
+        ) {
+            let config = self.plugin_or_panic(plugin_id);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+            assert!(action_index < config.action_count, "{}", Errors::PLUGIN_ACTION_OUT_OF_RANGE);
+
+            let shift = config.action_offset + action_index;
+            let action_bit = self.action_bit_from_position(shift);
+            let caller = get_caller_address();
+            self.check_permission(caller, action_bit, 0);
+
+            syscalls::call_contract_syscall(config.target_contract, selector, calldata).unwrap_syscall();
+
+            self.emit(events::PluginActionExecuted { plugin_id, action_index, executed_by: caller });
+        }
+
+        fn ponzi_buy_land(
+            ref self: ComponentState<TContractState>,
+            land_location: u16,
+            token_for_sale: ContractAddress,
+            sell_price: u256,
+            amount_to_stake: u256,
+        ) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::PONZI_BUY_LAND, amount_to_stake);
+
+            let config = self.plugins.read('ponziland');
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }
+                .buy(land_location, token_for_sale, sell_price, amount_to_stake);
+        }
+
+        fn ponzi_set_price(
+            ref self: ComponentState<TContractState>, land_location: u16, new_price: u256,
+        ) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::PONZI_SET_PRICE, 0);
+
+            let config = self.plugins.read('ponziland');
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }
+                .increase_price(land_location, new_price);
+        }
+
+        fn ponzi_claim_yield(ref self: ComponentState<TContractState>, land_location: u16) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::PONZI_CLAIM_YIELD, 0);
+
+            let config = self.plugins.read('ponziland');
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }.claim(land_location);
+        }
+
+        fn ponzi_increase_stake(
+            ref self: ComponentState<TContractState>, land_location: u16, amount_to_stake: u256,
+        ) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::PONZI_STAKE, amount_to_stake);
+
+            let config = self.plugins.read('ponziland');
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }
+                .increase_stake(land_location, amount_to_stake);
+        }
+
+        fn ponzi_withdraw_stake(ref self: ComponentState<TContractState>, land_location: u16) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::PONZI_UNSTAKE, 0);
+
+            let config = self.plugins.read('ponziland');
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }
+                .withdraw_stake(land_location);
+        }
+
+        fn dissolve(ref self: ComponentState<TContractState>) {
+            self.only_governor();
+            self.is_dissolved.write(true);
+            self.emit(events::GuildDissolved { dissolved_at: get_block_timestamp() });
         }
 
         // ----------------------------------------------------------------
