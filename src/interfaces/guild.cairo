@@ -122,6 +122,11 @@ pub trait IGuild<TState> {
 
     /// Dissolve the guild. Only callable by the Governor.
     fn dissolve(ref self: TState);
+
+    // --- Factory Init ---
+
+    /// One-shot setter for governor_address (only callable when current value is zero).
+    fn set_governor_address(ref self: TState, governor_address: ContractAddress);
 }
 
 /// Guild read-only view functions.

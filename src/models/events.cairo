@@ -197,3 +197,19 @@ pub struct InactivityCleared {
 pub struct GuildDissolved {
     pub dissolved_at: u64,
 }
+
+// ========================================================================
+// Factory Events
+// ========================================================================
+
+#[derive(Drop, starknet::Event)]
+pub struct GuildCreated {
+    #[key]
+    pub guild_address: ContractAddress,
+    pub token_address: ContractAddress,
+    pub governor_address: ContractAddress,
+    pub name: felt252,
+    pub ticker: felt252,
+    pub creator: ContractAddress,
+    pub created_at: u64,
+}

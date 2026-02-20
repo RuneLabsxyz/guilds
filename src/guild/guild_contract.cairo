@@ -128,6 +128,7 @@ pub mod GuildComponent {
         pub const TOKEN_ADDRESS_INVALID: felt252 = 'Token address cannot be zero';
         pub const GOVERNOR_ADDRESS_INVALID: felt252 = 'Governor address cannot be zero';
         pub const FOUNDER_ADDRESS_INVALID: felt252 = 'Founder address cannot be zero';
+        pub const GOVERNOR_ALREADY_SET: felt252 = 'Governor already set';
         pub const INVALID_ROLE_NAME: felt252 = 'Role name cannot be zero';
         pub const CANNOT_DELETE_FOUNDER: felt252 = 'Cannot delete founder role';
         pub const ROLE_HAS_MEMBERS: felt252 = 'Role still has assigned members';
@@ -210,7 +211,8 @@ pub mod GuildComponent {
             assert!(guild_name != 0, "{}", Errors::GUILD_NAME_INVALID);
             assert!(guild_ticker != 0, "{}", Errors::GUILD_TICKER_INVALID);
             assert!(token_address != Zero::zero(), "{}", Errors::TOKEN_ADDRESS_INVALID);
-            assert!(governor_address != Zero::zero(), "{}", Errors::GOVERNOR_ADDRESS_INVALID);
+            // governor_address may be zero during factory deployment (set via
+            // set_governor_address after Governor is deployed)
             assert!(founder != Zero::zero(), "{}", Errors::FOUNDER_ADDRESS_INVALID);
             assert!(founder_role.name != 0, "{}", Errors::INVALID_ROLE_NAME);
             assert!(!founder_role.can_be_kicked, "{}", Errors::FOUNDER_MUST_NOT_KICK);
@@ -1209,6 +1211,19 @@ pub mod GuildComponent {
                 );
 
             self.emit(events::InviteRevoked { target, revoked_by: caller });
+        }
+
+        /// One-shot setter for governor_address, callable only when the current
+        /// value is zero (i.e., during factory deployment before Governor is
+        /// deployed). Once set, cannot be changed.
+        fn set_governor_address(
+            ref self: ComponentState<TContractState>, governor_address: ContractAddress,
+        ) {
+            assert!(
+                self.governor_address.read() == Zero::zero(), "{}", Errors::GOVERNOR_ALREADY_SET,
+            );
+            assert!(governor_address != Zero::zero(), "{}", Errors::GOVERNOR_ADDRESS_INVALID);
+            self.governor_address.write(governor_address);
         }
     }
 }

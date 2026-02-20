@@ -242,5 +242,17 @@ pub mod GuildToken {
         fn get_guild_address(self: @ContractState) -> ContractAddress {
             self.guild_address.read()
         }
+
+        fn set_guild_address(ref self: ContractState, guild_address: ContractAddress) {
+            assert!(self.guild_address.read() == Zero::zero(), "Guild address already set");
+            assert!(guild_address != Zero::zero(), "Guild address cannot be zero");
+            self.guild_address.write(guild_address);
+        }
+
+        fn set_governor_address(ref self: ContractState, governor_address: ContractAddress) {
+            assert!(self.governor_address.read() == Zero::zero(), "Governor address already set");
+            assert!(governor_address != Zero::zero(), "Governor address cannot be zero");
+            self.governor_address.write(governor_address);
+        }
     }
 }

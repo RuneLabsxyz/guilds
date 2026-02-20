@@ -169,8 +169,9 @@ fn test_initializer_rejects_zero_token_address() {
 }
 
 #[test]
-#[should_panic]
-fn test_initializer_rejects_zero_governor_address() {
+fn test_initializer_allows_zero_governor_address_for_factory() {
+    // The initializer now allows zero governor_address so the factory can
+    // deploy Guild before Governor exists and wire it later via set_governor_address.
     let mut state = COMPONENT_STATE();
     start_cheat_caller_address(test_address(), FOUNDER());
     state
@@ -183,6 +184,31 @@ fn test_initializer_rejects_zero_governor_address() {
             FOUNDER(),
             default_founder_role(),
         );
+    // Governor should be zero until set
+    assert!(state.guild.governor_address.read() == starknet::contract_address_const::<0>());
+    // Wire it via the one-shot setter
+    state.guild.set_governor_address(GOVERNOR());
+    assert!(state.guild.governor_address.read() == GOVERNOR());
+}
+
+#[test]
+#[should_panic]
+fn test_set_governor_address_rejects_double_set() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .initializer(
+            'TestGuild',
+            'TG',
+            TOKEN(),
+            starknet::contract_address_const::<0>(),
+            FOUNDER(),
+            default_founder_role(),
+        );
+    state.guild.set_governor_address(GOVERNOR());
+    // Second call should panic
+    state.guild.set_governor_address(GOVERNOR());
 }
 
 #[test]
