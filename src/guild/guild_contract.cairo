@@ -603,6 +603,18 @@ pub mod GuildComponent {
                 .buy(land_location, token_for_sale, sell_price, amount_to_stake);
         }
 
+        fn ponzi_sell_land(ref self: ComponentState<TContractState>, land_location: u16) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::PONZI_SELL_LAND, 0);
+
+            let config = self.plugins.read('ponziland');
+            assert!(config.target_contract != Zero::zero(), "{}", Errors::PONZILAND_NOT_REGISTERED);
+            assert!(config.enabled, "{}", Errors::PLUGIN_DISABLED);
+
+            IPonziLandActionsDispatcher { contract_address: config.target_contract }
+                .sell(land_location);
+        }
+
         fn ponzi_set_price(
             ref self: ComponentState<TContractState>, land_location: u16, new_price: u256,
         ) {

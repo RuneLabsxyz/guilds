@@ -9,6 +9,7 @@ pub mod PonziLandMock {
         last_buy_price: u256,
         last_buy_stake_amount: u256,
         last_buy_token_for_sale: ContractAddress,
+        last_sell_location: u16,
         last_claim_location: u16,
         last_set_price_location: u16,
         last_set_price_value: u256,
@@ -33,6 +34,12 @@ pub mod PonziLandMock {
             self.last_buy_price.write(sell_price);
             self.last_buy_stake_amount.write(amount_to_stake);
             self.last_buy_token_for_sale.write(token_for_sale);
+            self.call_count.write(self.call_count.read() + 1);
+        }
+
+        #[external(v0)]
+        fn sell(ref self: ContractState, land_location: u16) {
+            self.last_sell_location.write(land_location);
             self.call_count.write(self.call_count.read() + 1);
         }
 
@@ -75,6 +82,11 @@ pub mod PonziLandMock {
         #[external(v0)]
         fn get_last_buy_location(self: @ContractState) -> u16 {
             self.last_buy_location.read()
+        }
+
+        #[external(v0)]
+        fn get_last_sell_location(self: @ContractState) -> u16 {
+            self.last_sell_location.read()
         }
 
         #[external(v0)]
