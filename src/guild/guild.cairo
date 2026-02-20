@@ -184,6 +184,10 @@ pub mod Guild {
         fn dissolve(ref self: ContractState) {
             self.guild.dissolve();
         }
+
+        fn set_governor_address(ref self: ContractState, governor_address: ContractAddress) {
+            self.guild.set_governor_address(governor_address);
+        }
     }
 
     #[abi(embed_v0)]

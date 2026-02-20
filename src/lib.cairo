@@ -45,6 +45,10 @@ pub mod governor {
     pub mod guild_governor;
 }
 
+pub mod factory {
+    pub mod guild_factory;
+}
+
 // Keep v0.1 for backward compatibility during migration
 pub mod gov {
     pub mod governance;

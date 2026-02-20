@@ -45,4 +45,12 @@ pub trait IGuildToken<TState> {
 
     /// Get the guild contract address this token is associated with.
     fn get_guild_address(self: @TState) -> ContractAddress;
+
+    // --- Factory Init ---
+
+    /// One-shot setter for guild_address (only callable when current value is zero).
+    fn set_guild_address(ref self: TState, guild_address: ContractAddress);
+
+    /// One-shot setter for governor_address (only callable when current value is zero).
+    fn set_governor_address(ref self: TState, governor_address: ContractAddress);
 }
