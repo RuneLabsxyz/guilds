@@ -1,6 +1,6 @@
 use guilds::models::types::{
-    DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow, Role,
-    ShareOffer,
+    DistributionPolicy, EpochSnapshot, GuildScore, Member, PendingInvite, PluginConfig,
+    RedemptionWindow, Role, Season, ShareOffer,
 };
 use starknet::ContractAddress;
 
@@ -118,6 +118,17 @@ pub trait IGuild<TState> {
     /// Redeem (burn) shares for proportional treasury value.
     fn redeem_shares(ref self: TState, amount: u256);
 
+    // --- Season Scoring ---
+
+    /// Create a new season. Only callable by the Governor.
+    fn create_season(ref self: TState, name: felt252, starts_at: u64, ends_at: u64);
+
+    /// Finalize a season (freeze scores). Only callable by the Governor.
+    fn finalize_season(ref self: TState, season_id: u64);
+
+    /// Record score points for the guild in a season. Requires SCORE permission.
+    fn record_score(ref self: TState, season_id: u64, points: u64);
+
     // --- Lifecycle ---
 
     /// Dissolve the guild. Only callable by the Governor.
@@ -148,4 +159,9 @@ pub trait IGuildView<TState> {
     fn get_active_offer(self: @TState) -> ShareOffer;
     fn has_active_offer(self: @TState) -> bool;
     fn get_redemption_window(self: @TState) -> RedemptionWindow;
+    fn is_dissolved(self: @TState) -> bool;
+    fn get_revenue_token(self: @TState) -> ContractAddress;
+    fn get_season(self: @TState, season_id: u64) -> Season;
+    fn get_season_count(self: @TState) -> u64;
+    fn get_guild_score(self: @TState, season_id: u64) -> GuildScore;
 }

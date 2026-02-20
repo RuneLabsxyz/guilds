@@ -31,8 +31,8 @@ pub mod GuildComponent {
     };
     use guilds::models::events;
     use guilds::models::types::{
-        DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
-        Role, ShareOffer,
+        DistributionPolicy, EpochSnapshot, GuildScore, Member, PendingInvite, PluginConfig,
+        RedemptionWindow, Role, Season, ShareOffer,
     };
     use openzeppelin_interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin_interfaces::votes::{IVotesDispatcher, IVotesDispatcherTrait};
@@ -78,6 +78,10 @@ pub mod GuildComponent {
         pub has_active_offer: bool,
         pub redemption_window: RedemptionWindow,
         pub member_last_redemption_epoch: Map<ContractAddress, u64>,
+        // --- Seasons ---
+        pub season_count: u64,
+        pub seasons: Map<u64, Season>,
+        pub guild_scores: Map<u64, GuildScore>,
         // --- Lifecycle ---
         pub is_dissolved: bool,
     }
@@ -109,6 +113,9 @@ pub mod GuildComponent {
         ShareOfferCreated: events::ShareOfferCreated,
         SharesPurchased: events::SharesPurchased,
         SharesRedeemed: events::SharesRedeemed,
+        SeasonCreated: events::SeasonCreated,
+        SeasonFinalized: events::SeasonFinalized,
+        ScoreRecorded: events::ScoreRecorded,
         GuildDissolved: events::GuildDissolved,
     }
 
@@ -187,6 +194,12 @@ pub mod GuildComponent {
         pub const REDEMPTION_LIMIT_EXCEEDED: felt252 = 'Exceeds epoch redemption limit';
         pub const REDEMPTION_COOLDOWN_ACTIVE: felt252 = 'Redemption cooldown active';
         pub const REDEMPTION_PAYOUT_ZERO: felt252 = 'Payout is zero';
+        pub const SEASON_NAME_INVALID: felt252 = 'Season name cannot be zero';
+        pub const SEASON_NOT_FOUND: felt252 = 'Season does not exist';
+        pub const SEASON_ALREADY_FINALIZED: felt252 = 'Season already finalized';
+        pub const SEASON_NOT_ACTIVE: felt252 = 'Season is not active';
+        pub const SEASON_TIMING_INVALID: felt252 = 'Season timing invalid';
+        pub const SCORE_ZERO: felt252 = 'Score must be > 0';
     }
 
     // ====================================================================
@@ -938,6 +951,81 @@ pub mod GuildComponent {
             }
 
             self.emit(events::SharesRedeemed { redeemer: caller, amount, payout });
+        }
+
+        // ----------------------------------------------------------------
+        // Season scoring
+        // ----------------------------------------------------------------
+
+        fn create_season(
+            ref self: ComponentState<TContractState>,
+            name: felt252,
+            starts_at: u64,
+            ends_at: u64,
+        ) -> u64 {
+            self.assert_not_dissolved();
+            self.only_governor();
+            assert!(name != 0, "{}", Errors::SEASON_NAME_INVALID);
+            if ends_at > 0 {
+                assert!(ends_at > starts_at, "{}", Errors::SEASON_TIMING_INVALID);
+            }
+
+            let season_id = self.season_count.read();
+            self
+                .seasons
+                .write(season_id, Season { name, starts_at, ends_at, finalized: false });
+            self.season_count.write(season_id + 1);
+
+            self.emit(events::SeasonCreated { season_id, name, starts_at, ends_at });
+
+            season_id
+        }
+
+        fn finalize_season(ref self: ComponentState<TContractState>, season_id: u64) {
+            self.assert_not_dissolved();
+            self.only_governor();
+
+            assert!(season_id < self.season_count.read(), "{}", Errors::SEASON_NOT_FOUND);
+            let mut season = self.seasons.read(season_id);
+            assert!(!season.finalized, "{}", Errors::SEASON_ALREADY_FINALIZED);
+
+            season.finalized = true;
+            self.seasons.write(season_id, season);
+
+            self
+                .emit(
+                    events::SeasonFinalized {
+                        season_id, finalized_at: get_block_timestamp(),
+                    },
+                );
+        }
+
+        fn record_score(
+            ref self: ComponentState<TContractState>, season_id: u64, points: u64,
+        ) {
+            let caller = get_caller_address();
+            self.check_permission(caller, ActionType::SCORE, 0);
+
+            assert!(season_id < self.season_count.read(), "{}", Errors::SEASON_NOT_FOUND);
+            let season = self.seasons.read(season_id);
+            assert!(!season.finalized, "{}", Errors::SEASON_ALREADY_FINALIZED);
+
+            let now = get_block_timestamp();
+            if season.starts_at > 0 {
+                assert!(now >= season.starts_at, "{}", Errors::SEASON_NOT_ACTIVE);
+            }
+            if season.ends_at > 0 {
+                assert!(now < season.ends_at, "{}", Errors::SEASON_NOT_ACTIVE);
+            }
+
+            assert!(points > 0, "{}", Errors::SCORE_ZERO);
+
+            let mut score = self.guild_scores.read(season_id);
+            score.points = score.points + points;
+            score.last_updated = now;
+            self.guild_scores.write(season_id, score);
+
+            self.emit(events::ScoreRecorded { season_id, points, recorded_by: caller });
         }
 
         fn dissolve(ref self: ComponentState<TContractState>) {

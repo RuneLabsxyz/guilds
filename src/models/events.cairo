@@ -199,6 +199,31 @@ pub struct GuildDissolved {
 }
 
 // ========================================================================
+// Season Events
+// ========================================================================
+
+#[derive(Drop, starknet::Event)]
+pub struct SeasonCreated {
+    pub season_id: u64,
+    pub name: felt252,
+    pub starts_at: u64,
+    pub ends_at: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct SeasonFinalized {
+    pub season_id: u64,
+    pub finalized_at: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct ScoreRecorded {
+    pub season_id: u64,
+    pub points: u64,
+    pub recorded_by: ContractAddress,
+}
+
+// ========================================================================
 // Factory Events
 // ========================================================================
 

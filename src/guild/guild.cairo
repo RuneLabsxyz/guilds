@@ -4,8 +4,8 @@ pub mod Guild {
     use guilds::guild::guild_contract::GuildComponent::InternalImpl;
     use guilds::interfaces::guild::{IGuild, IGuildView};
     use guilds::models::types::{
-        DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
-        Role, ShareOffer,
+        DistributionPolicy, EpochSnapshot, GuildScore, Member, PendingInvite, PluginConfig,
+        RedemptionWindow, Role, Season, ShareOffer,
     };
     use starknet::ContractAddress;
     use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
@@ -181,6 +181,20 @@ pub mod Guild {
             self.guild.redeem_shares(amount);
         }
 
+        fn create_season(
+            ref self: ContractState, name: felt252, starts_at: u64, ends_at: u64,
+        ) {
+            self.guild.create_season(name, starts_at, ends_at);
+        }
+
+        fn finalize_season(ref self: ContractState, season_id: u64) {
+            self.guild.finalize_season(season_id);
+        }
+
+        fn record_score(ref self: ContractState, season_id: u64, points: u64) {
+            self.guild.record_score(season_id, points);
+        }
+
         fn dissolve(ref self: ContractState) {
             self.guild.dissolve();
         }
@@ -254,6 +268,26 @@ pub mod Guild {
 
         fn get_redemption_window(self: @ContractState) -> RedemptionWindow {
             self.guild.redemption_window.read()
+        }
+
+        fn is_dissolved(self: @ContractState) -> bool {
+            self.guild.is_dissolved.read()
+        }
+
+        fn get_revenue_token(self: @ContractState) -> ContractAddress {
+            self.guild.revenue_token.read()
+        }
+
+        fn get_season(self: @ContractState, season_id: u64) -> Season {
+            self.guild.seasons.read(season_id)
+        }
+
+        fn get_season_count(self: @ContractState) -> u64 {
+            self.guild.season_count.read()
+        }
+
+        fn get_guild_score(self: @ContractState, season_id: u64) -> GuildScore {
+            self.guild.guild_scores.read(season_id)
         }
     }
 }
