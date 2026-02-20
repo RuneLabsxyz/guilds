@@ -44,6 +44,8 @@ class ContractGuardsTests(unittest.TestCase):
         self.assertIn("assert!(!founder_role.can_be_kicked", source)
         self.assertIn("self.role_member_count.read(role_id) == 0", source)
         self.assertIn("self.assert_not_member(caller);", source)
+        self.assertIn("old_role_id == 0 && new_role_id != 0", source)
+        self.assertIn("self.founder_count.read() > 1", source)
 
     def test_core_action_input_guards_present(self) -> None:
         source = _guild_contract_source()
@@ -75,8 +77,10 @@ class ContractGuardsTests(unittest.TestCase):
 
         self.assertIn("REDEMPTION_MAX_INVALID", source)
         self.assertIn("REDEMPTION_EPOCH_USAGE_INVALID", source)
+        self.assertIn("REDEMPTION_PAYOUT_ZERO", source)
         self.assertIn("window.max_per_epoch > 0", source)
         self.assertIn("window.redeemed_this_epoch == 0", source)
+        self.assertIn("assert!(payout > 0", source)
 
     def test_revenue_token_guards_present(self) -> None:
         source = _guild_contract_source()
