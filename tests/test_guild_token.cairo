@@ -387,6 +387,39 @@ fn test_multiple_accounts_flagged_and_cleared_correctly() {
 }
 
 #[test]
+fn test_transfer_from_flagged_account_increases_active_supply() {
+    let (address, guild_token, erc20, _, _) = deploy_guild_token();
+
+    start_cheat_caller_address(address, ALICE());
+    start_cheat_block_timestamp(address, BASE_TS() + THRESHOLD() + 1);
+    guild_token.flag_inactive(HOLDER());
+    assert!(guild_token.active_supply() == 0);
+
+    start_cheat_caller_address(address, HOLDER());
+    erc20.transfer(ALICE(), HUNDRED_TOKENS());
+
+    assert!(guild_token.active_supply() == HUNDRED_TOKENS());
+}
+
+#[test]
+fn test_transfer_to_flagged_account_decreases_active_supply() {
+    let (address, guild_token, erc20, _, _) = deploy_guild_token();
+
+    start_cheat_caller_address(address, HOLDER());
+    erc20.transfer(ALICE(), HUNDRED_TOKENS());
+
+    start_cheat_caller_address(address, BOB());
+    start_cheat_block_timestamp(address, BASE_TS() + THRESHOLD() + 1);
+    guild_token.flag_inactive(ALICE());
+    assert!(guild_token.active_supply() == INITIAL_SUPPLY() - HUNDRED_TOKENS());
+
+    start_cheat_caller_address(address, HOLDER());
+    erc20.transfer(ALICE(), ONE_TOKEN());
+
+    assert!(guild_token.active_supply() == INITIAL_SUPPLY() - HUNDRED_TOKENS() - ONE_TOKEN());
+}
+
+#[test]
 fn test_get_inactivity_threshold_returns_configured_value() {
     let (_, guild_token, _, _, _) = deploy_guild_token();
     assert!(guild_token.get_inactivity_threshold() == THRESHOLD());

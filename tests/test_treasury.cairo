@@ -255,6 +255,88 @@ fn test_execute_action_fails_dissolved() {
 }
 
 #[test]
+#[should_panic]
+fn test_execute_transfer_fails_zero_target() {
+    let (guild_address, guild, _) = deploy_guild();
+    let (token_address, token) = deploy_token(guild_address);
+    fund_guild(token_address, token, guild_address, 1_000);
+
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild
+        .execute_core_action(
+            ActionType::TRANSFER,
+            starknet::contract_address_const::<0>(),
+            token_address,
+            1,
+            array![].span(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_execute_transfer_fails_zero_token() {
+    let (guild_address, guild, _) = deploy_guild();
+
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild
+        .execute_core_action(
+            ActionType::TRANSFER,
+            RECIPIENT(),
+            starknet::contract_address_const::<0>(),
+            1,
+            array![].span(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_execute_approve_fails_zero_spender() {
+    let (guild_address, guild, _) = deploy_guild();
+    let (token_address, _) = deploy_token(guild_address);
+
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild
+        .execute_core_action(
+            ActionType::APPROVE,
+            starknet::contract_address_const::<0>(),
+            token_address,
+            1,
+            array![].span(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_execute_approve_fails_zero_token() {
+    let (guild_address, guild, _) = deploy_guild();
+
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild
+        .execute_core_action(
+            ActionType::APPROVE,
+            SPENDER(),
+            starknet::contract_address_const::<0>(),
+            1,
+            array![].span(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_execute_raw_call_fails_zero_target() {
+    let (guild_address, guild, _) = deploy_guild();
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild
+        .execute_core_action(
+            ActionType::EXECUTE,
+            starknet::contract_address_const::<0>(),
+            OTHER(),
+            0,
+            array![selector!("get_call_count")].span(),
+        );
+}
+
+#[test]
 fn test_register_plugin_governor() {
     let (guild_address, guild, view) = deploy_guild();
     let ponzi_address = deploy_ponziland();
@@ -275,6 +357,17 @@ fn test_register_plugin_fails_non_governor() {
     let (guild_address, guild, _) = deploy_guild();
     let ponzi_address = deploy_ponziland();
     start_cheat_caller_address(guild_address, FOUNDER());
+    guild.register_plugin('ponziland', ponzi_address, 8, 6);
+}
+
+#[test]
+#[should_panic]
+fn test_register_plugin_fails_dissolved() {
+    let (guild_address, guild, _) = deploy_guild();
+    let ponzi_address = deploy_ponziland();
+
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild.dissolve();
     guild.register_plugin('ponziland', ponzi_address, 8, 6);
 }
 
@@ -304,6 +397,34 @@ fn test_register_plugin_fails_offset_overflow() {
     let ponzi_address = deploy_ponziland();
     start_cheat_caller_address(guild_address, GOVERNOR());
     guild.register_plugin('ponziland', ponzi_address, 30, 3);
+}
+
+#[test]
+#[should_panic]
+fn test_register_plugin_fails_zero_target() {
+    let (guild_address, guild, _) = deploy_guild();
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild.register_plugin('ponziland', starknet::contract_address_const::<0>(), 8, 6);
+}
+
+#[test]
+#[should_panic]
+fn test_register_plugin_fails_zero_action_count() {
+    let (guild_address, guild, _) = deploy_guild();
+    let ponzi_address = deploy_ponziland();
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild.register_plugin('ponziland', ponzi_address, 8, 0);
+}
+
+#[test]
+#[should_panic]
+fn test_register_plugin_fails_action_bit_collision() {
+    let (guild_address, guild, _) = deploy_guild();
+    let ponzi_address = deploy_ponziland();
+    let other_plugin = deploy_ponziland();
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild.register_plugin('ponziland', ponzi_address, 8, 6);
+    guild.register_plugin('other', other_plugin, 10, 2);
 }
 
 #[test]

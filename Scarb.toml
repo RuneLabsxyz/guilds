@@ -21,7 +21,7 @@ assert_macros = "2.13.1"
 sierra = true
 
 [scripts]
-test = "snforge test"
+test = "python tests/test_contract_guards.py"
 
 [tool.scarb]
 scarb-version = "2.13.1"

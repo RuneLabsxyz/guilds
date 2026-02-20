@@ -178,6 +178,14 @@ fn test_invite_member_non_member_cannot_invite() {
 
 #[test]
 #[should_panic]
+fn test_invite_member_rejects_zero_target_address() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.invite_member(starknet::contract_address_const::<0>(), 2, 0);
+}
+
+#[test]
+#[should_panic]
 fn test_invite_member_member_without_can_invite_cannot_invite() {
     let mut state = setup_guild_with_roles();
     add_member(ref state, ALICE(), 2);
@@ -244,6 +252,24 @@ fn test_invite_member_governor_can_invite_to_any_role() {
 }
 
 #[test]
+#[should_panic]
+fn test_invite_member_governor_cannot_invite_existing_member() {
+    let mut state = setup_guild_with_roles();
+    add_member(ref state, ALICE(), 2);
+
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.invite_member(ALICE(), 1, 0);
+}
+
+#[test]
+#[should_panic]
+fn test_invite_member_governor_cannot_invite_to_nonexistent_role() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.invite_member(ALICE(), 99, 0);
+}
+
+#[test]
 fn test_invite_member_with_expiry_sets_pending_invite() {
     let mut state = setup_guild_with_roles();
     start_cheat_block_timestamp(test_address(), 100);
@@ -256,6 +282,32 @@ fn test_invite_member_with_expiry_sets_pending_invite() {
     assert!(invite.invited_by == FOUNDER());
     assert!(invite.invited_at == 100);
     assert!(invite.expires_at == 555);
+}
+
+#[test]
+#[should_panic]
+fn test_invite_member_rejects_expiry_in_past() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_block_timestamp(test_address(), 100);
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.invite_member(BOB(), 1, 100);
+}
+
+#[test]
+fn test_invite_member_allows_replacing_expired_pending_invite() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_block_timestamp(test_address(), 10);
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.invite_member(ALICE(), 2, 20);
+
+    start_cheat_block_timestamp(test_address(), 30);
+    state.guild.invite_member(ALICE(), 1, 60);
+
+    let invite = guild_storage(@state).pending_invites.read(ALICE());
+    assert!(invite.role_id == 1);
+    assert!(invite.invited_by == FOUNDER());
+    assert!(invite.invited_at == 30);
+    assert!(invite.expires_at == 60);
 }
 
 #[test]
@@ -300,6 +352,23 @@ fn test_accept_invite_increments_member_count() {
     state.guild.accept_invite();
 
     assert!(guild_storage(@state).member_count.read() == 2);
+}
+
+#[test]
+#[should_panic]
+fn test_accept_invite_existing_member_cannot_accept_seeded_invite() {
+    let mut state = setup_guild_with_roles();
+    add_member(ref state, ALICE(), 2);
+
+    guild_storage_mut(ref state)
+        .pending_invites
+        .write(
+            ALICE(),
+            PendingInvite { role_id: 1, invited_by: FOUNDER(), invited_at: 10, expires_at: 0 },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.accept_invite();
 }
 
 #[test]
@@ -417,6 +486,14 @@ fn test_kick_member_cannot_kick_non_member() {
 
 #[test]
 #[should_panic]
+fn test_kick_member_rejects_zero_target_address() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.kick_member(starknet::contract_address_const::<0>());
+}
+
+#[test]
+#[should_panic]
 fn test_kick_member_member_without_can_kick_cannot_kick() {
     let mut state = setup_guild_with_roles();
     add_member(ref state, ALICE(), 2);
@@ -526,6 +603,48 @@ fn test_change_member_role_founder_can_promote_member_within_depth() {
 
     let member = guild_storage(@state).members.read(ALICE());
     assert!(member.role_id == 1);
+}
+
+#[test]
+fn test_change_member_role_officer_can_change_lower_rank_member_within_depth() {
+    let mut state = setup_guild_with_roles();
+    add_member(ref state, ALICE(), 1);
+    add_member(ref state, BOB(), 3);
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.change_member_role(BOB(), 2);
+
+    let member = guild_storage(@state).members.read(BOB());
+    assert!(member.role_id == 2);
+}
+
+#[test]
+#[should_panic]
+fn test_change_member_role_cannot_modify_equal_rank_member() {
+    let mut state = setup_guild_with_roles();
+    add_member(ref state, ALICE(), 1);
+    add_member(ref state, BOB(), 1);
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.change_member_role(BOB(), 2);
+}
+
+#[test]
+#[should_panic]
+fn test_change_member_role_cannot_modify_higher_rank_member() {
+    let mut state = setup_guild_with_roles();
+    add_member(ref state, ALICE(), 1);
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.change_member_role(FOUNDER(), 2);
+}
+
+#[test]
+#[should_panic]
+fn test_change_member_role_rejects_zero_target_address() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.change_member_role(starknet::contract_address_const::<0>(), 1);
 }
 
 #[test]
@@ -641,6 +760,14 @@ fn test_revoke_invite_non_existent_invite_fails() {
     let mut state = setup_guild_with_roles();
     start_cheat_caller_address(test_address(), FOUNDER());
     state.guild.revoke_invite(ALICE());
+}
+
+#[test]
+#[should_panic]
+fn test_revoke_invite_rejects_zero_target_address() {
+    let mut state = setup_guild_with_roles();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.revoke_invite(starknet::contract_address_const::<0>());
 }
 
 #[test]

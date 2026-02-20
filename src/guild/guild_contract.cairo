@@ -62,6 +62,7 @@ pub mod GuildComponent {
         // --- Plugins ---
         pub plugins: Map<felt252, PluginConfig>,
         pub plugin_count: u8,
+        pub plugin_action_mask: u32,
         // --- Revenue ---
         pub distribution_policy: DistributionPolicy,
         pub current_epoch: u64,
@@ -122,13 +123,22 @@ pub mod GuildComponent {
         pub const EXCEEDS_SPENDING_LIMIT: felt252 = 'Exceeds spending limit';
         pub const ONLY_GOVERNOR: felt252 = 'Only governor can do this';
         pub const ROLE_NOT_FOUND: felt252 = 'Role does not exist';
+        pub const GUILD_NAME_INVALID: felt252 = 'Guild name cannot be zero';
+        pub const GUILD_TICKER_INVALID: felt252 = 'Guild ticker cannot be zero';
+        pub const TOKEN_ADDRESS_INVALID: felt252 = 'Token address cannot be zero';
+        pub const GOVERNOR_ADDRESS_INVALID: felt252 = 'Governor address cannot be zero';
+        pub const FOUNDER_ADDRESS_INVALID: felt252 = 'Founder address cannot be zero';
+        pub const INVALID_ROLE_NAME: felt252 = 'Role name cannot be zero';
         pub const CANNOT_DELETE_FOUNDER: felt252 = 'Cannot delete founder role';
+        pub const ROLE_HAS_MEMBERS: felt252 = 'Role still has assigned members';
         pub const GUILD_DISSOLVED: felt252 = 'Guild has been dissolved';
         pub const FOUNDER_MUST_NOT_KICK: felt252 = 'Founder role cannot be kickable';
         pub const INVITE_EXPIRED: felt252 = 'Invite has expired';
+        pub const INVITE_EXPIRY_INVALID: felt252 = 'Invite expiry invalid';
         pub const NO_PENDING_INVITE: felt252 = 'No pending invite found';
         pub const CANNOT_KICK_SELF: felt252 = 'Cannot kick yourself';
         pub const CANNOT_KICK_HIGHER_RANK: felt252 = 'Cannot kick higher/equal rank';
+        pub const CANNOT_MODIFY_HIGHER_RANK: felt252 = 'Cannot modify higher/equal rank';
         pub const TARGET_NOT_KICKABLE: felt252 = 'Target role is not kickable';
         pub const CANNOT_LEAVE_AS_LAST_FOUNDER: felt252 = 'Last founder cannot leave';
         pub const PROMOTE_DEPTH_EXCEEDED: felt252 = 'Promote depth exceeded';
@@ -138,16 +148,24 @@ pub mod GuildComponent {
         pub const CALLER_CANNOT_INVITE: felt252 = 'Caller cannot invite';
         pub const CALLER_CANNOT_KICK: felt252 = 'Caller cannot kick';
         pub const CALLER_CANNOT_PROMOTE: felt252 = 'Caller cannot promote';
+        pub const TARGET_ADDRESS_INVALID: felt252 = 'Target address cannot be zero';
         pub const PLUGIN_NOT_FOUND: felt252 = 'Plugin does not exist';
         pub const PLUGIN_DISABLED: felt252 = 'Plugin is disabled';
         pub const PLUGIN_ALREADY_EXISTS: felt252 = 'Plugin already exists';
+        pub const PLUGIN_TARGET_INVALID: felt252 = 'Plugin target cannot be zero';
+        pub const PLUGIN_ACTION_COUNT_ZERO: felt252 = 'Plugin action count must be > 0';
         pub const PLUGIN_ACTION_OUT_OF_RANGE: felt252 = 'Plugin action out of range';
         pub const PLUGIN_OFFSET_RESERVED: felt252 = 'Offset reserved for core';
         pub const PLUGIN_OFFSET_OVERFLOW: felt252 = 'Offset+count exceeds bitmask';
+        pub const PLUGIN_OFFSET_COLLISION: felt252 = 'Plugin action bits overlap';
         pub const INVALID_CORE_ACTION: felt252 = 'Invalid core action type';
+        pub const CORE_TARGET_INVALID: felt252 = 'Core action target cannot be zero';
+        pub const CORE_TOKEN_INVALID: felt252 = 'Core action token cannot be zero';
         pub const PONZILAND_NOT_REGISTERED: felt252 = 'PonziLand plugin not registered';
         pub const INVALID_BPS_SUM: felt252 = 'Invalid policy bps sum';
+        pub const REVENUE_TOKEN_INVALID: felt252 = 'Revenue token cannot be zero';
         pub const REVENUE_TOKEN_NOT_SET: felt252 = 'Revenue token not set';
+        pub const REVENUE_BALANCE_BELOW_CHECKPOINT: felt252 = 'Revenue below checkpoint';
         pub const NO_NEW_REVENUE: felt252 = 'No new revenue to distribute';
         pub const EPOCH_NOT_FINALIZED: felt252 = 'Epoch not finalized';
         pub const ALREADY_CLAIMED_EPOCH: felt252 = 'Already claimed this epoch';
@@ -155,7 +173,16 @@ pub mod GuildComponent {
         pub const NO_ACTIVE_OFFER: felt252 = 'No active share offer';
         pub const OFFER_EXPIRED: felt252 = 'Share offer expired';
         pub const OFFER_EXCEEDS_MAX: felt252 = 'Purchase exceeds offer max';
+        pub const OFFER_DEPOSIT_TOKEN_INVALID: felt252 = 'Offer deposit token invalid';
+        pub const OFFER_MAX_TOTAL_INVALID: felt252 = 'Offer max_total must be > 0';
+        pub const OFFER_PRICE_INVALID: felt252 = 'Offer price must be > 0';
+        pub const OFFER_EXPIRY_INVALID: felt252 = 'Offer expiry invalid';
+        pub const OFFER_AMOUNT_INVALID: felt252 = 'Purchase amount must be > 0';
+        pub const OFFER_COST_ZERO: felt252 = 'Offer purchase cost rounds to zero';
         pub const REDEMPTION_NOT_ENABLED: felt252 = 'Redemption not enabled';
+        pub const REDEMPTION_MAX_INVALID: felt252 = 'Redemption max invalid';
+        pub const REDEMPTION_EPOCH_USAGE_INVALID: felt252 = 'Redemption epoch usage invalid';
+        pub const REDEMPTION_AMOUNT_INVALID: felt252 = 'Redemption amount must be > 0';
         pub const REDEMPTION_LIMIT_EXCEEDED: felt252 = 'Exceeds epoch redemption limit';
         pub const REDEMPTION_COOLDOWN_ACTIVE: felt252 = 'Redemption cooldown active';
     }
@@ -179,6 +206,14 @@ pub mod GuildComponent {
             founder: ContractAddress,
             founder_role: Role,
         ) {
+            assert!(guild_name != 0, "{}", Errors::GUILD_NAME_INVALID);
+            assert!(guild_ticker != 0, "{}", Errors::GUILD_TICKER_INVALID);
+            assert!(token_address != Zero::zero(), "{}", Errors::TOKEN_ADDRESS_INVALID);
+            assert!(governor_address != Zero::zero(), "{}", Errors::GOVERNOR_ADDRESS_INVALID);
+            assert!(founder != Zero::zero(), "{}", Errors::FOUNDER_ADDRESS_INVALID);
+            assert!(founder_role.name != 0, "{}", Errors::INVALID_ROLE_NAME);
+            assert!(!founder_role.can_be_kicked, "{}", Errors::FOUNDER_MUST_NOT_KICK);
+
             self.guild_name.write(guild_name);
             self.guild_ticker.write(guild_ticker);
             self.token_address.write(token_address);
@@ -296,13 +331,28 @@ pub mod GuildComponent {
             value
         }
 
+        /// Build a contiguous plugin action bitmask from [offset, offset + count).
+        fn plugin_mask_from_range(
+            self: @ComponentState<TContractState>, action_offset: u8, action_count: u8,
+        ) -> u32 {
+            let mut mask: u32 = 0;
+            let mut i: u8 = 0;
+            while i < action_count {
+                mask = mask | self.action_bit_from_position(action_offset + i);
+                i = i + 1;
+            }
+            mask
+        }
+
         // ----------------------------------------------------------------
         // Role management (governor-only)
         // ----------------------------------------------------------------
 
         /// Create a new role. Returns the assigned role_id.
         fn create_role(ref self: ComponentState<TContractState>, role: Role) -> u8 {
+            self.assert_not_dissolved();
             self.only_governor();
+            assert!(role.name != 0, "{}", Errors::INVALID_ROLE_NAME);
 
             let role_id = self.role_count.read();
             self.roles.write(role_id, role);
@@ -324,7 +374,9 @@ pub mod GuildComponent {
         /// Modify an existing role.
         /// Founder role (0) must always have can_be_kicked = false.
         fn modify_role(ref self: ComponentState<TContractState>, role_id: u8, role: Role) {
+            self.assert_not_dissolved();
             self.only_governor();
+            assert!(role.name != 0, "{}", Errors::INVALID_ROLE_NAME);
             let old_role = self.get_role_or_panic(role_id);
 
             // Founder role must never be kickable
@@ -358,9 +410,11 @@ pub mod GuildComponent {
 
         /// Delete a role by zeroing it out. Cannot delete role 0 (founder).
         fn delete_role(ref self: ComponentState<TContractState>, role_id: u8) {
+            self.assert_not_dissolved();
             self.only_governor();
             assert!(role_id != 0, "{}", Errors::CANNOT_DELETE_FOUNDER);
             self.get_role_or_panic(role_id);
+            assert!(self.role_member_count.read(role_id) == 0, "{}", Errors::ROLE_HAS_MEMBERS);
 
             // Zero out the role (name = 0 marks it as deleted)
             self
@@ -398,6 +452,8 @@ pub mod GuildComponent {
             self.check_permission(caller, action_type, amount);
 
             if action_type == ActionType::TRANSFER {
+                assert!(target != Zero::zero(), "{}", Errors::CORE_TARGET_INVALID);
+                assert!(token != Zero::zero(), "{}", Errors::CORE_TOKEN_INVALID);
                 IERC20Dispatcher { contract_address: token }.transfer(target, amount);
                 if token == self.revenue_token.read() {
                     let checkpoint = self.revenue_balance_checkpoint.read();
@@ -408,8 +464,11 @@ pub mod GuildComponent {
                     }
                 }
             } else if action_type == ActionType::APPROVE {
+                assert!(target != Zero::zero(), "{}", Errors::CORE_TARGET_INVALID);
+                assert!(token != Zero::zero(), "{}", Errors::CORE_TOKEN_INVALID);
                 IERC20Dispatcher { contract_address: token }.approve(target, amount);
             } else if action_type == ActionType::EXECUTE {
+                assert!(target != Zero::zero(), "{}", Errors::CORE_TARGET_INVALID);
                 let mut execute_calldata = calldata;
                 let selector: felt252 = Serde::deserialize(ref execute_calldata)
                     .expect('Missing selector');
@@ -434,15 +493,23 @@ pub mod GuildComponent {
             action_offset: u8,
             action_count: u8,
         ) {
+            self.assert_not_dissolved();
             self.only_governor();
 
             let existing = self.plugins.read(plugin_id);
             assert!(existing.target_contract == Zero::zero(), "{}", Errors::PLUGIN_ALREADY_EXISTS);
+            assert!(target_contract != Zero::zero(), "{}", Errors::PLUGIN_TARGET_INVALID);
+            assert!(action_count > 0, "{}", Errors::PLUGIN_ACTION_COUNT_ZERO);
 
             let offset_u16: u16 = action_offset.into();
             let count_u16: u16 = action_count.into();
             assert!(offset_u16 >= 8, "{}", Errors::PLUGIN_OFFSET_RESERVED);
             assert!(offset_u16 + count_u16 <= 32, "{}", Errors::PLUGIN_OFFSET_OVERFLOW);
+            let new_plugin_mask = self.plugin_mask_from_range(action_offset, action_count);
+            let current_plugin_mask = self.plugin_action_mask.read();
+            assert!(
+                current_plugin_mask & new_plugin_mask == 0, "{}", Errors::PLUGIN_OFFSET_COLLISION,
+            );
 
             self
                 .plugins
@@ -451,6 +518,7 @@ pub mod GuildComponent {
                     PluginConfig { target_contract, enabled: true, action_offset, action_count },
                 );
             self.plugin_count.write(self.plugin_count.read() + 1);
+            self.plugin_action_mask.write(current_plugin_mask | new_plugin_mask);
 
             self
                 .emit(
@@ -463,6 +531,7 @@ pub mod GuildComponent {
         fn toggle_plugin(
             ref self: ComponentState<TContractState>, plugin_id: felt252, enabled: bool,
         ) {
+            self.assert_not_dissolved();
             self.only_governor();
 
             let mut config = self.plugin_or_panic(plugin_id);
@@ -570,6 +639,7 @@ pub mod GuildComponent {
         fn set_distribution_policy(
             ref self: ComponentState<TContractState>, policy: DistributionPolicy,
         ) {
+            self.assert_not_dissolved();
             self.only_governor();
             let total_bps = policy.treasury_bps + policy.player_bps + policy.shareholder_bps;
             assert!(total_bps == BPS_DENOMINATOR, "{}", Errors::INVALID_BPS_SUM);
@@ -585,7 +655,9 @@ pub mod GuildComponent {
         }
 
         fn set_revenue_token(ref self: ComponentState<TContractState>, token: ContractAddress) {
+            self.assert_not_dissolved();
             self.only_governor();
+            assert!(token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_INVALID);
             self.revenue_token.write(token);
             let balance = IERC20Dispatcher { contract_address: token }
                 .balance_of(get_contract_address());
@@ -602,6 +674,9 @@ pub mod GuildComponent {
             let current_balance = IERC20Dispatcher { contract_address: revenue_token }
                 .balance_of(get_contract_address());
             let checkpoint = self.revenue_balance_checkpoint.read();
+            assert!(
+                current_balance >= checkpoint, "{}", Errors::REVENUE_BALANCE_BELOW_CHECKPOINT,
+            );
             let new_revenue = current_balance - checkpoint;
             assert!(new_revenue > 0, "{}", Errors::NO_NEW_REVENUE);
 
@@ -633,6 +708,9 @@ pub mod GuildComponent {
                 );
             self.current_epoch.write(epoch + 1);
             self.revenue_balance_checkpoint.write(current_balance);
+            let mut redemption_window = self.redemption_window.read();
+            redemption_window.redeemed_this_epoch = 0;
+            self.redemption_window.write(redemption_window);
 
             self
                 .emit(
@@ -647,6 +725,7 @@ pub mod GuildComponent {
         }
 
         fn claim_player_revenue(ref self: ComponentState<TContractState>, epoch: u64) {
+            self.assert_not_dissolved();
             let caller = get_caller_address();
             let member = self.get_member_or_panic(caller);
             assert!(epoch < self.current_epoch.read(), "{}", Errors::EPOCH_NOT_FINALIZED);
@@ -661,6 +740,9 @@ pub mod GuildComponent {
             let share = (snapshot.player_amount * role.payout_weight.into())
                 / snapshot.total_payout_weight.into();
 
+            // Effects before interactions (reentrancy-safe claim progression)
+            self.member_last_claimed_epoch.write(caller, epoch + 1);
+
             let revenue_token = self.revenue_token.read();
             assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
             IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, share);
@@ -671,11 +753,11 @@ pub mod GuildComponent {
                 self.revenue_balance_checkpoint.write(0);
             }
 
-            self.member_last_claimed_epoch.write(caller, epoch + 1);
             self.emit(events::PlayerRevenueClaimed { member: caller, epoch, amount: share });
         }
 
         fn claim_shareholder_revenue(ref self: ComponentState<TContractState>, epoch: u64) {
+            self.assert_not_dissolved();
             let caller = get_caller_address();
             assert!(epoch < self.current_epoch.read(), "{}", Errors::EPOCH_NOT_FINALIZED);
 
@@ -689,6 +771,9 @@ pub mod GuildComponent {
             let holder_balance = votes.get_past_votes(caller, snapshot.finalized_at);
             let share = (snapshot.shareholder_amount * holder_balance) / snapshot.active_supply;
 
+            // Effects before interactions (reentrancy-safe claim progression)
+            self.shareholder_last_claimed_epoch.write(caller, epoch + 1);
+
             let revenue_token = self.revenue_token.read();
             assert!(revenue_token != Zero::zero(), "{}", Errors::REVENUE_TOKEN_NOT_SET);
             IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, share);
@@ -699,7 +784,6 @@ pub mod GuildComponent {
                 self.revenue_balance_checkpoint.write(0);
             }
 
-            self.shareholder_last_claimed_epoch.write(caller, epoch + 1);
             self
                 .emit(
                     events::ShareholderRevenueClaimed { shareholder: caller, epoch, amount: share },
@@ -707,10 +791,27 @@ pub mod GuildComponent {
         }
 
         fn create_share_offer(ref self: ComponentState<TContractState>, offer: ShareOffer) {
+            self.assert_not_dissolved();
             self.only_governor();
+            if self.has_active_offer.read() {
+                let active_offer = self.active_offer.read();
+                if active_offer.expires_at > 0 {
+                    if get_block_timestamp() >= active_offer.expires_at {
+                        self.has_active_offer.write(false);
+                    }
+                }
+            }
             assert!(!self.has_active_offer.read(), "{}", Errors::ACTIVE_OFFER_EXISTS);
-            assert!(offer.max_total > 0, "Max total must be positive");
-            assert!(offer.price_per_share > 0, "Price must be positive");
+            assert!(offer.deposit_token != Zero::zero(), "{}", Errors::OFFER_DEPOSIT_TOKEN_INVALID);
+            assert!(offer.max_total > 0, "{}", Errors::OFFER_MAX_TOTAL_INVALID);
+            assert!(offer.price_per_share > 0, "{}", Errors::OFFER_PRICE_INVALID);
+            if offer.expires_at > 0 {
+                assert!(
+                    offer.expires_at > get_block_timestamp(),
+                    "{}",
+                    Errors::OFFER_EXPIRY_INVALID,
+                );
+            }
 
             self
                 .active_offer
@@ -737,7 +838,9 @@ pub mod GuildComponent {
         }
 
         fn buy_shares(ref self: ComponentState<TContractState>, amount: u256) {
+            self.assert_not_dissolved();
             assert!(self.has_active_offer.read(), "{}", Errors::NO_ACTIVE_OFFER);
+            assert!(amount > 0, "{}", Errors::OFFER_AMOUNT_INVALID);
 
             let caller = get_caller_address();
             let mut offer = self.active_offer.read();
@@ -750,12 +853,9 @@ pub mod GuildComponent {
             assert!(next_minted <= offer.max_total, "{}", Errors::OFFER_EXCEEDS_MAX);
 
             let cost = (amount * offer.price_per_share) / TOKEN_MULTIPLIER;
+            assert!(cost > 0, "{}", Errors::OFFER_COST_ZERO);
 
-            IERC20Dispatcher { contract_address: offer.deposit_token }
-                .transfer_from(caller, get_contract_address(), cost);
-            IGuildTokenDispatcher { contract_address: self.token_address.read() }
-                .mint(caller, amount);
-
+            // Effects before interactions (reentrancy-safe offer accounting)
             offer.minted_so_far = next_minted;
             self.active_offer.write(offer);
 
@@ -763,17 +863,33 @@ pub mod GuildComponent {
                 self.has_active_offer.write(false);
             }
 
+            IERC20Dispatcher { contract_address: offer.deposit_token }
+                .transfer_from(caller, get_contract_address(), cost);
+            IGuildTokenDispatcher { contract_address: self.token_address.read() }
+                .mint(caller, amount);
+
             self.emit(events::SharesPurchased { buyer: caller, amount, cost });
         }
 
         fn set_redemption_window(
             ref self: ComponentState<TContractState>, window: RedemptionWindow,
         ) {
+            self.assert_not_dissolved();
             self.only_governor();
+            if window.enabled {
+                assert!(window.max_per_epoch > 0_u256, "{}", Errors::REDEMPTION_MAX_INVALID);
+            }
+            assert!(
+                window.redeemed_this_epoch == 0,
+                "{}",
+                Errors::REDEMPTION_EPOCH_USAGE_INVALID,
+            );
             self.redemption_window.write(window);
         }
 
         fn redeem_shares(ref self: ComponentState<TContractState>, amount: u256) {
+            self.assert_not_dissolved();
+            assert!(amount > 0, "{}", Errors::REDEMPTION_AMOUNT_INVALID);
             let caller = get_caller_address();
             let mut window = self.redemption_window.read();
             assert!(window.enabled, "{}", Errors::REDEMPTION_NOT_ENABLED);
@@ -799,6 +915,11 @@ pub mod GuildComponent {
 
             let payout = (treasury_balance * amount) / total_supply;
 
+            // Effects before interactions (reentrancy-safe redemption accounting)
+            window.redeemed_this_epoch = next_redeemed;
+            self.redemption_window.write(window);
+            self.member_last_redemption_epoch.write(caller, current_epoch);
+
             IGuildTokenDispatcher { contract_address: self.token_address.read() }
                 .burn(caller, amount);
             IERC20Dispatcher { contract_address: revenue_token }.transfer(caller, payout);
@@ -809,14 +930,11 @@ pub mod GuildComponent {
                 self.revenue_balance_checkpoint.write(0);
             }
 
-            window.redeemed_this_epoch = next_redeemed;
-            self.redemption_window.write(window);
-            self.member_last_redemption_epoch.write(caller, current_epoch);
-
             self.emit(events::SharesRedeemed { redeemer: caller, amount, payout });
         }
 
         fn dissolve(ref self: ComponentState<TContractState>) {
+            self.assert_not_dissolved();
             self.only_governor();
             self.is_dissolved.write(true);
             self.emit(events::GuildDissolved { dissolved_at: get_block_timestamp() });
@@ -833,24 +951,39 @@ pub mod GuildComponent {
             expires_at: u64,
         ) {
             self.assert_not_dissolved();
+            assert!(target != Zero::zero(), "{}", Errors::TARGET_ADDRESS_INVALID);
 
             let caller = get_caller_address();
             let governor = self.governor_address.read();
+
+            self.assert_not_member(target);
+            let existing_invite = self.pending_invites.read(target);
+            if existing_invite.invited_by != Zero::zero() {
+                if existing_invite.expires_at > 0 {
+                    if get_block_timestamp() >= existing_invite.expires_at {
+                        self
+                            .pending_invites
+                            .write(
+                                target,
+                                PendingInvite {
+                                    role_id: 0, invited_by: Zero::zero(), invited_at: 0, expires_at: 0,
+                                },
+                            );
+                    }
+                }
+            }
+            let refreshed_invite = self.pending_invites.read(target);
+            assert!(refreshed_invite.invited_by == Zero::zero(), "{}", Errors::HAS_PENDING_INVITE);
+            self.get_role_or_panic(role_id);
+            if expires_at > 0 {
+                assert!(expires_at > get_block_timestamp(), "{}", Errors::INVITE_EXPIRY_INVALID);
+            }
 
             if caller != governor {
                 let caller_member = self.get_member_or_panic(caller);
                 let caller_role = self.get_role_or_panic(caller_member.role_id);
                 assert!(caller_role.can_invite, "{}", Errors::CALLER_CANNOT_INVITE);
-
-                self.assert_not_member(target);
-
-                let existing_invite = self.pending_invites.read(target);
-                assert!(
-                    existing_invite.invited_by == Zero::zero(), "{}", Errors::HAS_PENDING_INVITE,
-                );
-
                 assert!(caller_member.role_id < role_id, "{}", Errors::CANNOT_INVITE_TO_HIGHER);
-                self.get_role_or_panic(role_id);
             }
 
             let invite = PendingInvite {
@@ -865,6 +998,7 @@ pub mod GuildComponent {
             self.assert_not_dissolved();
 
             let caller = get_caller_address();
+            self.assert_not_member(caller);
             let invite = self.pending_invites.read(caller);
             assert!(invite.invited_by != Zero::zero(), "{}", Errors::NO_PENDING_INVITE);
 
@@ -895,12 +1029,16 @@ pub mod GuildComponent {
             self
                 .role_member_count
                 .write(invite.role_id, self.role_member_count.read(invite.role_id) + 1);
+            // New members can only claim player revenue from epochs finalized
+            // after they join.
+            self.member_last_claimed_epoch.write(caller, self.current_epoch.read());
 
             self.emit(events::MemberJoined { member: caller, role_id: invite.role_id });
         }
 
         fn kick_member(ref self: ComponentState<TContractState>, target: ContractAddress) {
             self.assert_not_dissolved();
+            assert!(target != Zero::zero(), "{}", Errors::TARGET_ADDRESS_INVALID);
 
             let caller = get_caller_address();
             let governor = self.governor_address.read();
@@ -979,14 +1117,21 @@ pub mod GuildComponent {
             ref self: ComponentState<TContractState>, target: ContractAddress, new_role_id: u8,
         ) {
             self.assert_not_dissolved();
+            assert!(target != Zero::zero(), "{}", Errors::TARGET_ADDRESS_INVALID);
 
             let caller = get_caller_address();
             let governor = self.governor_address.read();
+            let mut target_member = self.get_member_or_panic(target);
 
             if caller != governor {
                 let caller_member = self.get_member_or_panic(caller);
                 let caller_role = self.get_role_or_panic(caller_member.role_id);
                 assert!(caller_role.can_promote_depth > 0, "{}", Errors::CALLER_CANNOT_PROMOTE);
+                assert!(
+                    caller_member.role_id < target_member.role_id,
+                    "{}",
+                    Errors::CANNOT_MODIFY_HIGHER_RANK,
+                );
                 assert!(
                     new_role_id > caller_member.role_id, "{}", Errors::CANNOT_PROMOTE_TO_HIGHER,
                 );
@@ -999,7 +1144,6 @@ pub mod GuildComponent {
 
             self.get_role_or_panic(new_role_id);
 
-            let mut target_member = self.get_member_or_panic(target);
             let old_role_id = target_member.role_id;
             target_member.role_id = new_role_id;
             self.members.write(target, target_member);
@@ -1037,6 +1181,7 @@ pub mod GuildComponent {
 
         fn revoke_invite(ref self: ComponentState<TContractState>, target: ContractAddress) {
             self.assert_not_dissolved();
+            assert!(target != Zero::zero(), "{}", Errors::TARGET_ADDRESS_INVALID);
 
             let caller = get_caller_address();
             let invite = self.pending_invites.read(target);

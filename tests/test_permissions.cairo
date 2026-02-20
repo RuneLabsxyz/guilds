@@ -89,6 +89,26 @@ fn test_initializer_sets_guild_ticker() {
 }
 
 #[test]
+#[should_panic]
+fn test_initializer_rejects_zero_guild_name() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .initializer(0, 'TG', TOKEN(), GOVERNOR(), FOUNDER(), default_founder_role());
+}
+
+#[test]
+#[should_panic]
+fn test_initializer_rejects_zero_guild_ticker() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .initializer('TestGuild', 0, TOKEN(), GOVERNOR(), FOUNDER(), default_founder_role());
+}
+
+#[test]
 fn test_initializer_sets_token_address() {
     let state = setup_guild();
     assert!(guild_storage(@state).token_address.read() == TOKEN());
@@ -129,6 +149,99 @@ fn test_initializer_sets_member_count() {
 fn test_initializer_sets_role_count() {
     let state = setup_guild();
     assert!(guild_storage(@state).role_count.read() == 1);
+}
+
+#[test]
+#[should_panic]
+fn test_initializer_rejects_zero_token_address() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .initializer(
+            'TestGuild',
+            'TG',
+            starknet::contract_address_const::<0>(),
+            GOVERNOR(),
+            FOUNDER(),
+            default_founder_role(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_initializer_rejects_zero_governor_address() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .initializer(
+            'TestGuild',
+            'TG',
+            TOKEN(),
+            starknet::contract_address_const::<0>(),
+            FOUNDER(),
+            default_founder_role(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_initializer_rejects_zero_founder_address() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .initializer(
+            'TestGuild',
+            'TG',
+            TOKEN(),
+            GOVERNOR(),
+            starknet::contract_address_const::<0>(),
+            default_founder_role(),
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_initializer_rejects_zero_founder_role_name() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+
+    let mut invalid_founder_role = default_founder_role();
+    invalid_founder_role.name = 0;
+
+    state
+        .guild
+        .initializer(
+            'TestGuild',
+            'TG',
+            TOKEN(),
+            GOVERNOR(),
+            FOUNDER(),
+            invalid_founder_role,
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_initializer_rejects_kickable_founder_role() {
+    let mut state = COMPONENT_STATE();
+    start_cheat_caller_address(test_address(), FOUNDER());
+
+    let mut invalid_founder_role = default_founder_role();
+    invalid_founder_role.can_be_kicked = true;
+
+    state
+        .guild
+        .initializer(
+            'TestGuild',
+            'TG',
+            TOKEN(),
+            GOVERNOR(),
+            FOUNDER(),
+            invalid_founder_role,
+        );
 }
 
 // ========================================================================
@@ -441,6 +554,25 @@ fn test_create_role_non_governor_rejected() {
 }
 
 #[test]
+#[should_panic]
+fn test_create_role_rejects_zero_name_tombstone() {
+    let mut state = setup_guild();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+
+    let role = Role {
+        name: 0,
+        can_invite: true,
+        can_kick: false,
+        can_promote_depth: 1,
+        can_be_kicked: true,
+        allowed_actions: ActionType::TRANSFER,
+        spending_limit: 1000,
+        payout_weight: 100,
+    };
+    state.guild.create_role(role);
+}
+
+#[test]
 fn test_modify_role() {
     let mut state = setup_guild();
     start_cheat_caller_address(test_address(), GOVERNOR());
@@ -542,6 +674,37 @@ fn test_modify_role_non_governor_rejected() {
 }
 
 #[test]
+#[should_panic]
+fn test_modify_role_rejects_zero_name_tombstone() {
+    let mut state = setup_guild();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+
+    let role = Role {
+        name: 'officer',
+        can_invite: true,
+        can_kick: false,
+        can_promote_depth: 1,
+        can_be_kicked: true,
+        allowed_actions: ActionType::TRANSFER,
+        spending_limit: 1000,
+        payout_weight: 100,
+    };
+    state.guild.create_role(role);
+
+    let invalid_update = Role {
+        name: 0,
+        can_invite: true,
+        can_kick: false,
+        can_promote_depth: 1,
+        can_be_kicked: true,
+        allowed_actions: ActionType::TRANSFER,
+        spending_limit: 1000,
+        payout_weight: 100,
+    };
+    state.guild.modify_role(1, invalid_update);
+}
+
+#[test]
 fn test_delete_role() {
     let mut state = setup_guild();
     start_cheat_caller_address(test_address(), GOVERNOR());
@@ -583,6 +746,32 @@ fn test_delete_nonexistent_role_rejected() {
     let mut state = setup_guild();
     start_cheat_caller_address(test_address(), GOVERNOR());
     state.guild.delete_role(99);
+}
+
+#[test]
+#[should_panic]
+fn test_delete_role_with_assigned_members_rejected() {
+    let mut state = setup_guild();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+
+    let role = Role {
+        name: 'temp',
+        can_invite: false,
+        can_kick: false,
+        can_promote_depth: 0,
+        can_be_kicked: true,
+        allowed_actions: 0,
+        spending_limit: 0,
+        payout_weight: 0,
+    };
+    state.guild.create_role(role);
+
+    guild_storage_mut(ref state)
+        .members
+        .write(ALICE(), Member { addr: ALICE(), role_id: 1, joined_at: 0 });
+    guild_storage_mut(ref state).role_member_count.write(1, 1);
+
+    state.guild.delete_role(1);
 }
 
 #[test]
@@ -687,15 +876,21 @@ fn test_check_permission_on_dissolved_guild() {
 }
 
 #[test]
-fn test_governor_bypasses_on_dissolved_guild() {
+#[should_panic]
+fn test_governor_blocked_on_dissolved_guild() {
     let mut state = setup_guild();
-    // Note: governor bypass happens before dissolved check, so it still works
-    // Actually, let me check the code... dissolved check is first. So governor
-    // should also fail on dissolved guild. Let me verify.
-    // Looking at the code: assert_not_dissolved is called BEFORE the governor check.
-    // This means even governor cannot act on dissolved guild. This is intentional.
-    // Let's verify:
     guild_storage_mut(ref state).is_dissolved.write(true);
-    // Governor should also be blocked
-// (if this test fails, it means governor bypasses dissolved check — which we don't want)
+    // Governor should also be blocked by dissolved state.
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    let role = Role {
+        name: 'officer',
+        can_invite: false,
+        can_kick: false,
+        can_promote_depth: 0,
+        can_be_kicked: true,
+        allowed_actions: 0,
+        spending_limit: 0,
+        payout_weight: 100,
+    };
+    state.guild.create_role(role);
 }

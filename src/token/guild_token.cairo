@@ -66,6 +66,20 @@ pub mod GuildToken {
             let mut contract = self.get_contract_mut();
             contract.votes.transfer_voting_units(from, recipient, amount);
 
+            let current_inactive = contract.inactive_balance.read();
+            if from != Zero::zero() && contract.inactivity_flags.read(from).flagged_at > 0 {
+                if amount <= current_inactive {
+                    contract.inactive_balance.write(current_inactive - amount);
+                } else {
+                    contract.inactive_balance.write(0);
+                }
+            }
+
+            if recipient != Zero::zero()
+                && contract.inactivity_flags.read(recipient).flagged_at > 0 {
+                contract.inactive_balance.write(contract.inactive_balance.read() + amount);
+            }
+
             let ts = get_block_timestamp();
             if from != Zero::zero() {
                 contract.last_activity.write(from, ts);
@@ -223,15 +237,6 @@ pub mod GuildToken {
                 "Only governor or guild can burn",
             );
             self.erc20.burn(account, amount);
-
-            if self.inactivity_flags.read(account).flagged_at > 0 {
-                let current_inactive = self.inactive_balance.read();
-                if amount <= current_inactive {
-                    self.inactive_balance.write(current_inactive - amount);
-                } else {
-                    self.inactive_balance.write(0);
-                }
-            }
         }
 
         fn get_guild_address(self: @ContractState) -> ContractAddress {

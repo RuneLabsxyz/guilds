@@ -172,7 +172,7 @@ fn delegate_self(token: ContractAddress, account: ContractAddress) {
 
 fn approve_for_guild(token: IERC20Dispatcher, owner: ContractAddress, amount: u256) {
     start_cheat_caller_address(token.contract_address, owner);
-    token.approve(owner, amount);
+    token.approve(test_address(), amount);
 }
 
 #[test]
@@ -219,6 +219,14 @@ fn test_set_revenue_token_fails_non_governor() {
     let (mut state, _, revenue_token) = setup_state();
     start_cheat_caller_address(test_address(), FOUNDER());
     state.guild.set_revenue_token(revenue_token);
+}
+
+#[test]
+#[should_panic]
+fn test_set_revenue_token_fails_zero_address() {
+    let (mut state, _, _) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.set_revenue_token(starknet::contract_address_const::<0>());
 }
 
 #[test]
@@ -276,6 +284,21 @@ fn test_finalize_epoch_fails_no_revenue_token() {
 fn test_finalize_epoch_fails_no_revenue() {
     let (mut state, _, revenue_token) = setup_state();
     set_revenue_token(ref state, revenue_token);
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+}
+
+#[test]
+#[should_panic]
+fn test_finalize_epoch_fails_when_balance_below_checkpoint() {
+    let (mut state, _, revenue_token) = setup_state();
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, HUNDRED());
+
+    let revenue = IERC20Dispatcher { contract_address: revenue_token };
+    start_cheat_caller_address(revenue_token, test_address());
+    revenue.transfer(ALICE(), ONE());
+
     start_cheat_caller_address(test_address(), FOUNDER());
     state.guild.finalize_epoch();
 }
@@ -367,6 +390,19 @@ fn test_claim_player_revenue_fails_already_claimed() {
 }
 
 #[test]
+#[should_panic]
+fn test_claim_player_revenue_fails_dissolved() {
+    let (mut state, _, revenue_token) = setup_state();
+    set_distribution(ref state, 0, 10_000, 0);
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+    state.guild.dissolve();
+    state.guild.claim_player_revenue(0);
+}
+
+#[test]
 fn test_claim_player_revenue_multiple_members() {
     let (mut state, _, revenue_token) = setup_state();
     create_role_and_join(ref state, ALICE(), officer_role());
@@ -379,6 +415,56 @@ fn test_claim_player_revenue_multiple_members() {
     start_cheat_caller_address(test_address(), ALICE());
     state.guild.claim_player_revenue(0);
     assert!(guild_storage(@state).revenue_balance_checkpoint.read() == 0);
+}
+
+#[test]
+fn test_accept_invite_sets_member_claim_cursor_to_current_epoch() {
+    let (mut state, _, revenue_token) = setup_state();
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    create_role_and_join(ref state, ALICE(), officer_role());
+
+    assert!(guild_storage(@state).member_last_claimed_epoch.read(ALICE()) == 1);
+}
+
+#[test]
+#[should_panic]
+fn test_joined_member_cannot_claim_player_revenue_for_past_epoch() {
+    let (mut state, _, revenue_token) = setup_state();
+    set_distribution(ref state, 0, 10_000, 0);
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    create_role_and_join(ref state, ALICE(), officer_role());
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.claim_player_revenue(0);
+}
+
+#[test]
+fn test_joined_member_can_claim_player_revenue_for_future_epoch() {
+    let (mut state, _, revenue_token) = setup_state();
+    set_distribution(ref state, 0, 10_000, 0);
+    set_revenue_token(ref state, revenue_token);
+
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    create_role_and_join(ref state, ALICE(), officer_role());
+
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.claim_player_revenue(1);
+    assert!(guild_storage(@state).member_last_claimed_epoch.read(ALICE()) == 2);
 }
 
 #[test]
@@ -523,6 +609,114 @@ fn test_create_share_offer_fails_already_active() {
 }
 
 #[test]
+#[should_panic]
+fn test_create_share_offer_fails_zero_deposit_token() {
+    let (mut state, _, _) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: starknet::contract_address_const::<0>(),
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: ONE(),
+                expires_at: 0,
+            },
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_create_share_offer_fails_zero_max_total() {
+    let (mut state, _, revenue_token) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: 0,
+                minted_so_far: 0,
+                price_per_share: ONE(),
+                expires_at: 0,
+            },
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_create_share_offer_fails_zero_price() {
+    let (mut state, _, revenue_token) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: 0,
+                expires_at: 0,
+            },
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_create_share_offer_fails_expired_at_creation() {
+    let (mut state, _, revenue_token) = setup_state();
+    start_cheat_block_timestamp(test_address(), 10);
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: ONE(),
+                expires_at: 10,
+            },
+        );
+}
+
+#[test]
+fn test_create_share_offer_allows_replacing_expired_offer() {
+    let (mut state, _, revenue_token) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: ONE(),
+                expires_at: 2,
+            },
+        );
+
+    start_cheat_block_timestamp(test_address(), 3);
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: 2 * THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: 2 * ONE(),
+                expires_at: 0,
+            },
+        );
+
+    let offer = guild_storage(@state).active_offer.read();
+    assert!(guild_storage(@state).has_active_offer.read());
+    assert!(offer.max_total == 2 * THOUSAND());
+    assert!(offer.price_per_share == 2 * ONE());
+}
+
+#[test]
 fn test_buy_shares_mints_tokens() {
     let (mut state, guild_token, revenue_token) = setup_state();
     let token = IGuildTokenDispatcher { contract_address: guild_token };
@@ -593,6 +787,48 @@ fn test_buy_shares_fails_no_active_offer() {
 
 #[test]
 #[should_panic]
+fn test_buy_shares_fails_zero_amount() {
+    let (mut state, _, revenue_token) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: ONE(),
+                expires_at: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.buy_shares(0);
+}
+
+#[test]
+#[should_panic]
+fn test_buy_shares_fails_zero_rounded_cost() {
+    let (mut state, _, revenue_token) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: 1,
+                expires_at: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.buy_shares(1);
+}
+
+#[test]
+#[should_panic]
 fn test_buy_shares_fails_expired() {
     let (mut state, _, revenue_token) = setup_state();
     let deposit = IERC20Dispatcher { contract_address: revenue_token };
@@ -644,6 +880,33 @@ fn test_buy_shares_fails_exceeds_max() {
 }
 
 #[test]
+#[should_panic]
+fn test_buy_shares_fails_dissolved() {
+    let (mut state, _, revenue_token) = setup_state();
+    let deposit = IERC20Dispatcher { contract_address: revenue_token };
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .create_share_offer(
+            ShareOffer {
+                deposit_token: revenue_token,
+                max_total: THOUSAND(),
+                minted_so_far: 0,
+                price_per_share: ONE(),
+                expires_at: 0,
+            },
+        );
+    state.guild.dissolve();
+
+    start_cheat_caller_address(revenue_token, FOUNDER());
+    deposit.transfer(ALICE(), 5 * ONE());
+    approve_for_guild(deposit, ALICE(), 5 * ONE());
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.buy_shares(ONE());
+}
+
+#[test]
 fn test_set_redemption_window_governor() {
     let (mut state, _, _) = setup_state();
     start_cheat_caller_address(test_address(), GOVERNOR());
@@ -661,6 +924,54 @@ fn test_set_redemption_window_governor() {
     assert!(window.enabled);
     assert!(window.max_per_epoch == THOUSAND());
     assert!(window.cooldown_epochs == 2);
+}
+
+#[test]
+#[should_panic]
+fn test_set_redemption_window_fails_non_governor() {
+    let (mut state, _, _) = setup_state();
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true,
+                max_per_epoch: THOUSAND(),
+                redeemed_this_epoch: 0,
+                cooldown_epochs: 1,
+            },
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_set_redemption_window_fails_enabled_zero_max_per_epoch() {
+    let (mut state, _, _) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true, max_per_epoch: 0, redeemed_this_epoch: 0, cooldown_epochs: 0,
+            },
+        );
+}
+
+#[test]
+#[should_panic]
+fn test_set_redemption_window_fails_nonzero_redeemed_this_epoch() {
+    let (mut state, _, _) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: false,
+                max_per_epoch: 0,
+                redeemed_this_epoch: ONE(),
+                cooldown_epochs: 0,
+            },
+        );
 }
 
 #[test]
@@ -698,11 +1009,88 @@ fn test_redeem_shares_burns_and_pays() {
 }
 
 #[test]
+fn test_finalize_epoch_resets_redemption_epoch_usage() {
+    let (mut state, guild_token, revenue_token) = setup_state();
+    let token = IGuildTokenDispatcher { contract_address: guild_token };
+    start_cheat_caller_address(guild_token, GOVERNOR());
+    token.mint(ALICE(), HUNDRED());
+
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, 200 * ONE());
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true, max_per_epoch: HUNDRED(), redeemed_this_epoch: 0, cooldown_epochs: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(HUNDRED());
+    assert!(guild_storage(@state).redemption_window.read().redeemed_this_epoch == HUNDRED());
+
+    fund_contract(revenue_token, ONE());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+    assert!(guild_storage(@state).redemption_window.read().redeemed_this_epoch == 0);
+}
+
+#[test]
+fn test_redeem_shares_limit_applies_per_epoch_not_lifetime() {
+    let (mut state, guild_token, revenue_token) = setup_state();
+    let token = IGuildTokenDispatcher { contract_address: guild_token };
+    start_cheat_caller_address(guild_token, GOVERNOR());
+    token.mint(ALICE(), 2 * HUNDRED());
+
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, 400 * ONE());
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true, max_per_epoch: HUNDRED(), redeemed_this_epoch: 0, cooldown_epochs: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(HUNDRED());
+
+    fund_contract(revenue_token, ONE());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(HUNDRED());
+}
+
+#[test]
 #[should_panic]
 fn test_redeem_shares_fails_not_enabled() {
     let (mut state, _, _) = setup_state();
     start_cheat_caller_address(test_address(), ALICE());
     state.guild.redeem_shares(ONE());
+}
+
+#[test]
+#[should_panic]
+fn test_redeem_shares_fails_zero_amount() {
+    let (mut state, _, _) = setup_state();
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true,
+                max_per_epoch: THOUSAND(),
+                redeemed_this_epoch: 0,
+                cooldown_epochs: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(0);
 }
 
 #[test]
