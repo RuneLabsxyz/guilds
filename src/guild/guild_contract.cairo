@@ -142,6 +142,8 @@ pub mod GuildComponent {
         pub const PLUGIN_DISABLED: felt252 = 'Plugin is disabled';
         pub const PLUGIN_ALREADY_EXISTS: felt252 = 'Plugin already exists';
         pub const PLUGIN_ACTION_OUT_OF_RANGE: felt252 = 'Plugin action out of range';
+        pub const PLUGIN_TARGET_ZERO: felt252 = 'Plugin target cannot be zero';
+        pub const PLUGIN_ACTION_COUNT_ZERO: felt252 = 'Plugin action count must be > 0';
         pub const PLUGIN_OFFSET_RESERVED: felt252 = 'Offset reserved for core';
         pub const PLUGIN_OFFSET_OVERFLOW: felt252 = 'Offset+count exceeds bitmask';
         pub const INVALID_CORE_ACTION: felt252 = 'Invalid core action type';
@@ -438,6 +440,8 @@ pub mod GuildComponent {
 
             let existing = self.plugins.read(plugin_id);
             assert!(existing.target_contract == Zero::zero(), "{}", Errors::PLUGIN_ALREADY_EXISTS);
+            assert!(target_contract != Zero::zero(), "{}", Errors::PLUGIN_TARGET_ZERO);
+            assert!(action_count > 0, "{}", Errors::PLUGIN_ACTION_COUNT_ZERO);
 
             let offset_u16: u16 = action_offset.into();
             let count_u16: u16 = action_count.into();
@@ -632,6 +636,9 @@ pub mod GuildComponent {
                     },
                 );
             self.current_epoch.write(epoch + 1);
+            let mut window = self.redemption_window.read();
+            window.redeemed_this_epoch = 0;
+            self.redemption_window.write(window);
             self.revenue_balance_checkpoint.write(current_balance);
 
             self

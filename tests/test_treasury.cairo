@@ -307,6 +307,23 @@ fn test_register_plugin_fails_offset_overflow() {
 }
 
 #[test]
+#[should_panic]
+fn test_register_plugin_fails_zero_target() {
+    let (guild_address, guild, _) = deploy_guild();
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild.register_plugin('ponziland', 0.as_address(), 8, 6);
+}
+
+#[test]
+#[should_panic]
+fn test_register_plugin_fails_zero_action_count() {
+    let (guild_address, guild, _) = deploy_guild();
+    let ponzi_address = deploy_ponziland();
+    start_cheat_caller_address(guild_address, GOVERNOR());
+    guild.register_plugin('ponziland', ponzi_address, 8, 0);
+}
+
+#[test]
 fn test_toggle_plugin_governor() {
     let (guild_address, guild, view) = deploy_guild();
     let ponzi_address = deploy_ponziland();

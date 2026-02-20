@@ -687,15 +687,9 @@ fn test_check_permission_on_dissolved_guild() {
 }
 
 #[test]
-fn test_governor_bypasses_on_dissolved_guild() {
+#[should_panic]
+fn test_governor_cannot_bypass_on_dissolved_guild() {
     let mut state = setup_guild();
-    // Note: governor bypass happens before dissolved check, so it still works
-    // Actually, let me check the code... dissolved check is first. So governor
-    // should also fail on dissolved guild. Let me verify.
-    // Looking at the code: assert_not_dissolved is called BEFORE the governor check.
-    // This means even governor cannot act on dissolved guild. This is intentional.
-    // Let's verify:
     guild_storage_mut(ref state).is_dissolved.write(true);
-    // Governor should also be blocked
-// (if this test fails, it means governor bypasses dissolved check — which we don't want)
+    state.guild.check_permission(GOVERNOR(), ActionType::TRANSFER, 0);
 }

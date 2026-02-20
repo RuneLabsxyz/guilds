@@ -873,3 +873,71 @@ fn test_buy_shares_cost_uses_token_multiplier() {
         deposit.balance_of(test_address()) == before + (4 * ONE() * 3 * ONE()) / TOKEN_MULTIPLIER,
     );
 }
+
+#[test]
+fn test_finalize_epoch_resets_redemption_used_amount() {
+    let (mut state, guild_token, revenue_token) = setup_state();
+    let token = IGuildTokenDispatcher { contract_address: guild_token };
+
+    start_cheat_caller_address(guild_token, GOVERNOR());
+    token.mint(ALICE(), HUNDRED());
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, 300 * ONE());
+
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true,
+                max_per_epoch: 150 * ONE(),
+                redeemed_this_epoch: 0,
+                cooldown_epochs: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(HUNDRED());
+    assert!(guild_storage(@state).redemption_window.read().redeemed_this_epoch == HUNDRED());
+
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    assert!(guild_storage(@state).redemption_window.read().redeemed_this_epoch == 0);
+}
+
+#[test]
+fn test_redeem_shares_limit_applies_per_epoch_not_lifetime() {
+    let (mut state, guild_token, revenue_token) = setup_state();
+    let token = IGuildTokenDispatcher { contract_address: guild_token };
+
+    start_cheat_caller_address(guild_token, GOVERNOR());
+    token.mint(ALICE(), 300 * ONE());
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, 900 * ONE());
+
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true,
+                max_per_epoch: 150 * ONE(),
+                redeemed_this_epoch: 0,
+                cooldown_epochs: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(150 * ONE());
+    assert!(guild_storage(@state).redemption_window.read().redeemed_this_epoch == 150 * ONE());
+
+    fund_contract(revenue_token, HUNDRED());
+    start_cheat_caller_address(test_address(), FOUNDER());
+    state.guild.finalize_epoch();
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(150 * ONE());
+    assert!(guild_storage(@state).redemption_window.read().redeemed_this_epoch == 150 * ONE());
+}
