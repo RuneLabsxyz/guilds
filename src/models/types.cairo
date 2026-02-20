@@ -148,6 +148,29 @@ pub struct GuildRegistryEntry {
     pub is_active: bool,
 }
 
+/// A season defines a competitive period for guild standings.
+/// Seasons are created and finalized through governance.
+#[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
+pub struct Season {
+    /// Human-readable identifier for the season
+    pub name: felt252,
+    /// Block timestamp when the season started
+    pub starts_at: u64,
+    /// Block timestamp when the season ends (0 = open-ended)
+    pub ends_at: u64,
+    /// Whether the season has been finalized (scores are frozen)
+    pub finalized: bool,
+}
+
+/// A guild's score entry for a specific season.
+#[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
+pub struct GuildScore {
+    /// Accumulated points for this guild in this season
+    pub points: u64,
+    /// Block timestamp of the last score update
+    pub last_updated: u64,
+}
+
 /// Governor configuration used during guild deployment.
 /// Not stored on-chain after initialization — passed to Governor constructor.
 #[derive(Drop, Serde, Copy)]

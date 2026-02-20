@@ -18,7 +18,9 @@ pub mod ActionType {
     pub const SHARE_MGMT: u32 = 0x10; // bit 4
     /// Trigger epoch finalization and distribution
     pub const DISTRIBUTE: u32 = 0x20; // bit 5
-    // bits 6-7 reserved for future core actions
+    /// Record season scores for guild standings
+    pub const SCORE: u32 = 0x40; // bit 6
+    // bit 7 reserved for future core action
 
     /// PonziLand plugin actions (bits 8-15)
     pub const PONZI_BUY_LAND: u32 = 0x100; // bit 8
@@ -33,11 +35,11 @@ pub mod ActionType {
     // bits 24-31: available for plugin slot 3
 
     /// Convenience: all core actions
-    pub const ALL_CORE: u32 = 0x3F; // bits 0-5
+    pub const ALL_CORE: u32 = 0x7F; // bits 0-6
     /// Convenience: all PonziLand actions
     pub const ALL_PONZI: u32 = 0x3F00; // bits 8-13
     /// Convenience: all actions (core + ponziland)
-    pub const ALL: u32 = 0x3F3F; // bits 0-5 + 8-13
+    pub const ALL: u32 = 0x3F7F; // bits 0-6 + 8-13
 }
 
 /// Basis points denominator (100% = 10000 bps)
