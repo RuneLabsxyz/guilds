@@ -159,8 +159,8 @@ pub mod GuildComponent {
         pub const PLUGIN_OFFSET_OVERFLOW: felt252 = 'Offset+count exceeds bitmask';
         pub const PLUGIN_OFFSET_COLLISION: felt252 = 'Plugin action bits overlap';
         pub const INVALID_CORE_ACTION: felt252 = 'Invalid core action type';
-        pub const CORE_TARGET_INVALID: felt252 = 'Core action target cannot be zero';
-        pub const CORE_TOKEN_INVALID: felt252 = 'Core action token cannot be zero';
+        pub const CORE_TARGET_INVALID: felt252 = 'Core target invalid';
+        pub const CORE_TOKEN_INVALID: felt252 = 'Core token invalid';
         pub const PONZILAND_NOT_REGISTERED: felt252 = 'PonziLand plugin not registered';
         pub const INVALID_BPS_SUM: felt252 = 'Invalid policy bps sum';
         pub const REVENUE_TOKEN_INVALID: felt252 = 'Revenue token cannot be zero';
@@ -178,14 +178,14 @@ pub mod GuildComponent {
         pub const OFFER_PRICE_INVALID: felt252 = 'Offer price must be > 0';
         pub const OFFER_EXPIRY_INVALID: felt252 = 'Offer expiry invalid';
         pub const OFFER_AMOUNT_INVALID: felt252 = 'Purchase amount must be > 0';
-        pub const OFFER_COST_ZERO: felt252 = 'Offer purchase cost rounds to zero';
+        pub const OFFER_COST_ZERO: felt252 = 'Offer cost is zero';
         pub const REDEMPTION_NOT_ENABLED: felt252 = 'Redemption not enabled';
         pub const REDEMPTION_MAX_INVALID: felt252 = 'Redemption max invalid';
         pub const REDEMPTION_EPOCH_USAGE_INVALID: felt252 = 'Redemption epoch usage invalid';
         pub const REDEMPTION_AMOUNT_INVALID: felt252 = 'Redemption amount must be > 0';
         pub const REDEMPTION_LIMIT_EXCEEDED: felt252 = 'Exceeds epoch redemption limit';
         pub const REDEMPTION_COOLDOWN_ACTIVE: felt252 = 'Redemption cooldown active';
-        pub const REDEMPTION_PAYOUT_ZERO: felt252 = 'Redemption payout rounds to zero';
+        pub const REDEMPTION_PAYOUT_ZERO: felt252 = 'Payout is zero';
     }
 
     // ====================================================================
@@ -453,8 +453,9 @@ pub mod GuildComponent {
             self.check_permission(caller, action_type, amount);
 
             if action_type == ActionType::TRANSFER {
-                assert!(target != Zero::zero(), "{}", Errors::CORE_TARGET_INVALID);
-                assert!(token != Zero::zero(), "{}", Errors::CORE_TOKEN_INVALID);
+                let zero_address: ContractAddress = Zero::zero();
+                assert!(target != zero_address, "{}", Errors::CORE_TARGET_INVALID);
+                assert!(token != zero_address, "{}", Errors::CORE_TOKEN_INVALID);
                 IERC20Dispatcher { contract_address: token }.transfer(target, amount);
                 if token == self.revenue_token.read() {
                     let checkpoint = self.revenue_balance_checkpoint.read();
@@ -465,11 +466,13 @@ pub mod GuildComponent {
                     }
                 }
             } else if action_type == ActionType::APPROVE {
-                assert!(target != Zero::zero(), "{}", Errors::CORE_TARGET_INVALID);
-                assert!(token != Zero::zero(), "{}", Errors::CORE_TOKEN_INVALID);
+                let zero_address: ContractAddress = Zero::zero();
+                assert!(target != zero_address, "{}", Errors::CORE_TARGET_INVALID);
+                assert!(token != zero_address, "{}", Errors::CORE_TOKEN_INVALID);
                 IERC20Dispatcher { contract_address: token }.approve(target, amount);
             } else if action_type == ActionType::EXECUTE {
-                assert!(target != Zero::zero(), "{}", Errors::CORE_TARGET_INVALID);
+                let zero_address: ContractAddress = Zero::zero();
+                assert!(target != zero_address, "{}", Errors::CORE_TARGET_INVALID);
                 let mut execute_calldata = calldata;
                 let selector: felt252 = Serde::deserialize(ref execute_calldata)
                     .expect('Missing selector');
@@ -854,7 +857,7 @@ pub mod GuildComponent {
             assert!(next_minted <= offer.max_total, "{}", Errors::OFFER_EXCEEDS_MAX);
 
             let cost = (amount * offer.price_per_share) / TOKEN_MULTIPLIER;
-            assert!(cost > 0, "{}", Errors::OFFER_COST_ZERO);
+            assert!(cost > 0_u256, "{}", Errors::OFFER_COST_ZERO);
 
             // Effects before interactions (reentrancy-safe offer accounting)
             offer.minted_so_far = next_minted;
@@ -915,7 +918,7 @@ pub mod GuildComponent {
             assert!(total_supply > 0, "No token supply");
 
             let payout = (treasury_balance * amount) / total_supply;
-            assert!(payout > 0, "{}", Errors::REDEMPTION_PAYOUT_ZERO);
+            assert!(payout > 0_u256, "{}", Errors::REDEMPTION_PAYOUT_ZERO);
 
             // Effects before interactions (reentrancy-safe redemption accounting)
             window.redeemed_this_epoch = next_redeemed;
