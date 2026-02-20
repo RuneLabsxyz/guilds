@@ -113,6 +113,10 @@ pub mod Guild {
             self.guild.ponzi_buy_land(land_location, token_for_sale, sell_price, amount_to_stake);
         }
 
+        fn ponzi_sell_land(ref self: ContractState, land_location: u16) {
+            self.guild.ponzi_sell_land(land_location);
+        }
+
         fn ponzi_set_price(ref self: ContractState, land_location: u16, new_price: u256) {
             self.guild.ponzi_set_price(land_location, new_price);
         }

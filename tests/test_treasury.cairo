@@ -651,6 +651,46 @@ fn test_get_guild_name_returns_name() {
 }
 
 #[test]
+fn test_ponzi_sell_land_with_permission() {
+    let (guild_address, guild, _) = deploy_guild();
+    let ponzi_address = deploy_ponziland();
+    register_ponziland_plugin(guild_address, guild, ponzi_address);
+    create_member_and_join(
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_SELL_LAND, 0),
+    );
+
+    start_cheat_caller_address(guild_address, ALICE());
+    guild.ponzi_sell_land(15);
+
+    assert!(ponzi_u32(ponzi_address, selector!("get_call_count")) == 1);
+    assert!(ponzi_u16(ponzi_address, selector!("get_last_sell_location")) == 15);
+}
+
+#[test]
+#[should_panic]
+fn test_ponzi_sell_land_fails_no_permission() {
+    let (guild_address, guild, _) = deploy_guild();
+    let ponzi_address = deploy_ponziland();
+    register_ponziland_plugin(guild_address, guild, ponzi_address);
+    create_member_and_join(guild_address, guild, ALICE(), member_role(0, 500));
+
+    start_cheat_caller_address(guild_address, ALICE());
+    guild.ponzi_sell_land(15);
+}
+
+#[test]
+#[should_panic]
+fn test_ponzi_sell_land_fails_plugin_not_registered() {
+    let (guild_address, guild, _) = deploy_guild();
+    create_member_and_join(
+        guild_address, guild, ALICE(), member_role(ActionType::PONZI_SELL_LAND, 0),
+    );
+
+    start_cheat_caller_address(guild_address, ALICE());
+    guild.ponzi_sell_land(15);
+}
+
+#[test]
 fn test_view_functions_return_correct_data() {
     let (guild_address, guild, view) = deploy_guild();
     create_member_and_join(guild_address, guild, ALICE(), member_role(ActionType::TRANSFER, 1000));

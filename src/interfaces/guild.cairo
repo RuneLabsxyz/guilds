@@ -68,6 +68,7 @@ pub trait IGuild<TState> {
         sell_price: u256,
         amount_to_stake: u256,
     );
+    fn ponzi_sell_land(ref self: TState, land_location: u16);
     fn ponzi_set_price(ref self: TState, land_location: u16, new_price: u256);
     fn ponzi_claim_yield(ref self: TState, land_location: u16);
     fn ponzi_increase_stake(ref self: TState, land_location: u16, amount_to_stake: u256);
