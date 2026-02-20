@@ -66,6 +66,21 @@ pub mod GuildToken {
             let mut contract = self.get_contract_mut();
             contract.votes.transfer_voting_units(from, recipient, amount);
 
+            // Keep inactive_balance in sync with balance movements involving flagged accounts.
+            // This ensures active_supply stays correct on transfer/mint/burn paths.
+            if from != Zero::zero() && contract.inactivity_flags.read(from).flagged_at > 0 {
+                let current_inactive = contract.inactive_balance.read();
+                if amount <= current_inactive {
+                    contract.inactive_balance.write(current_inactive - amount);
+                } else {
+                    contract.inactive_balance.write(0);
+                }
+            }
+            if recipient != Zero::zero() && contract.inactivity_flags.read(recipient).flagged_at > 0
+            {
+                contract.inactive_balance.write(contract.inactive_balance.read() + amount);
+            }
+
             let ts = get_block_timestamp();
             if from != Zero::zero() {
                 contract.last_activity.write(from, ts);
@@ -223,19 +238,24 @@ pub mod GuildToken {
                 "Only governor or guild can burn",
             );
             self.erc20.burn(account, amount);
-
-            if self.inactivity_flags.read(account).flagged_at > 0 {
-                let current_inactive = self.inactive_balance.read();
-                if amount <= current_inactive {
-                    self.inactive_balance.write(current_inactive - amount);
-                } else {
-                    self.inactive_balance.write(0);
-                }
-            }
         }
 
         fn get_guild_address(self: @ContractState) -> ContractAddress {
             self.guild_address.read()
         }
+    }
+
+    #[external(v0)]
+    fn set_governor_address(ref self: ContractState, new_governor: ContractAddress) {
+        let caller = get_caller_address();
+        assert!(caller == self.governor_address.read(), "Only governor");
+        self.governor_address.write(new_governor);
+    }
+
+    #[external(v0)]
+    fn set_guild_address(ref self: ContractState, new_guild: ContractAddress) {
+        let caller = get_caller_address();
+        assert!(caller == self.governor_address.read(), "Only governor");
+        self.guild_address.write(new_guild);
     }
 }

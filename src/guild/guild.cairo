@@ -7,7 +7,7 @@ pub mod Guild {
         DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
         Role, ShareOffer,
     };
-    use starknet::ContractAddress;
+    use starknet::{ContractAddress, get_caller_address};
     use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
 
     component!(path: GuildComponent, storage: guild, event: GuildEvent);
@@ -251,5 +251,12 @@ pub mod Guild {
         fn get_redemption_window(self: @ContractState) -> RedemptionWindow {
             self.guild.redemption_window.read()
         }
+    }
+
+    #[external(v0)]
+    fn set_governor_address(ref self: ContractState, new_governor: ContractAddress) {
+        let caller = get_caller_address();
+        assert!(caller == self.guild.governor_address.read(), 'Only governor');
+        self.guild.governor_address.write(new_governor);
     }
 }
