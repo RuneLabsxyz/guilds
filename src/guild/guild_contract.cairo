@@ -185,6 +185,7 @@ pub mod GuildComponent {
         pub const REDEMPTION_AMOUNT_INVALID: felt252 = 'Redemption amount must be > 0';
         pub const REDEMPTION_LIMIT_EXCEEDED: felt252 = 'Exceeds epoch redemption limit';
         pub const REDEMPTION_COOLDOWN_ACTIVE: felt252 = 'Redemption cooldown active';
+        pub const REDEMPTION_PAYOUT_ZERO: felt252 = 'Redemption payout rounds to zero';
     }
 
     // ====================================================================
@@ -914,6 +915,7 @@ pub mod GuildComponent {
             assert!(total_supply > 0, "No token supply");
 
             let payout = (treasury_balance * amount) / total_supply;
+            assert!(payout > 0, "{}", Errors::REDEMPTION_PAYOUT_ZERO);
 
             // Effects before interactions (reentrancy-safe redemption accounting)
             window.redeemed_this_epoch = next_redeemed;
@@ -1145,6 +1147,9 @@ pub mod GuildComponent {
             self.get_role_or_panic(new_role_id);
 
             let old_role_id = target_member.role_id;
+            if old_role_id == 0 && new_role_id != 0 {
+                assert!(self.founder_count.read() > 1, "{}", Errors::CANNOT_LEAVE_AS_LAST_FOUNDER);
+            }
             target_member.role_id = new_role_id;
             self.members.write(target, target_member);
 

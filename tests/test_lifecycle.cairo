@@ -704,6 +704,15 @@ fn test_change_member_role_governor_can_change_any_member_role() {
 }
 
 #[test]
+#[should_panic]
+fn test_change_member_role_cannot_demote_last_founder() {
+    let mut state = setup_guild_with_roles();
+
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state.guild.change_member_role(FOUNDER(), 2);
+}
+
+#[test]
 fn test_change_member_role_from_or_to_role_zero_updates_founder_count() {
     let mut state = setup_guild_with_roles();
     add_member(ref state, ALICE(), 2);

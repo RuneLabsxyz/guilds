@@ -1121,6 +1121,32 @@ fn test_redeem_shares_fails_exceeds_epoch_limit() {
 
 #[test]
 #[should_panic]
+fn test_redeem_shares_fails_zero_rounded_payout() {
+    let (mut state, guild_token, revenue_token) = setup_state();
+    let token = IGuildTokenDispatcher { contract_address: guild_token };
+    start_cheat_caller_address(guild_token, GOVERNOR());
+    token.mint(ALICE(), ONE());
+    set_revenue_token(ref state, revenue_token);
+    fund_contract(revenue_token, 1);
+
+    start_cheat_caller_address(test_address(), GOVERNOR());
+    state
+        .guild
+        .set_redemption_window(
+            RedemptionWindow {
+                enabled: true,
+                max_per_epoch: THOUSAND(),
+                redeemed_this_epoch: 0,
+                cooldown_epochs: 0,
+            },
+        );
+
+    start_cheat_caller_address(test_address(), ALICE());
+    state.guild.redeem_shares(1);
+}
+
+#[test]
+#[should_panic]
 fn test_redeem_shares_fails_cooldown() {
     let (mut state, guild_token, revenue_token) = setup_state();
     let token = IGuildTokenDispatcher { contract_address: guild_token };
