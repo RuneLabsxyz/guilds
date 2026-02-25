@@ -1,0 +1,40 @@
+[models]
+enabled = ["claude", "codex", "gemini"]
+default = "codex"
+
+[concurrency]
+per_repo = 8
+claude = 6
+codex = 6
+gemini = 4
+
+[graphite]
+auto_submit = true
+submit_mode_default = "single"
+allow_move = "manual"
+
+[ui]
+web_bind = "127.0.0.1:9842"
+
+[notifications]
+enabled = false
+stdout = true
+
+[daemon]
+tick_interval_secs = 2
+agent_timeout_secs = 2400
+
+[budget]
+enabled = false
+daily_token_limit = 10000000
+monthly_token_limit = 100000000
+
+[permissions]
+default_permission = "allow"
+rules = []
+
+[permissions.model_overrides]
+
+[context_paths]
+paths = ["/home/server/vault-human/life/areas/projects/guilds.md"]
+auto_detect = true

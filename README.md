@@ -121,9 +121,53 @@ Master wallet can trigger ad-hoc distributions.
 
 ## 📁 Repository Structure
 
-TODO
+- `src/` — core guild contracts (roles, governance, treasury, revenue, lifecycle)
+- `tests/` — integration and edge-case suites (snforge)
+- `docs/` — protocol and implementation notes
+- `.othala/` — orchestration config (merge mode + auto-submit)
+
 ---
 
+## 🧪 Client Playground + SDK Spec (v0.2)
+
+### 1) Client Playground (must work end-to-end)
+A lightweight playground app/CLI should allow any dev to:
+- create guilds with realistic params
+- simulate join/invite/blacklist/revoke lifecycle
+- execute role-gated treasury actions
+- run governance proposals/voting/execution
+- simulate revenue epochs, claims, and redemptions
+- inspect onchain state transitions and emitted events
+
+**Goal:** reproduce full user journeys without hand-written scripts.
+
+### 2) SDK (game-agnostic)
+Provide an SDK that external games can integrate with minimal friction:
+- typed client for guild read/write methods
+- event/indexing helpers
+- action builders for governance and treasury operations
+- role/permission capability checks before tx submission
+- canonical error mapping and retry semantics
+
+**First integrator:** PonziLand, but API surface should remain generic.
+
+### 3) E2E QA Expectations
+QA should verify real behavior, not only compile success.
+
+Required suites:
+- **Protocol invariants:** role matrix, governor bypass constraints, dissolved-guild restrictions
+- **Lifecycle flows:** create → invite/join → role changes → leave/kick/blacklist → dissolve
+- **Governance flows:** propose, vote, quorum checks, execute/defeat timing windows
+- **Treasury flows:** transfer/approve/plugin actions with spending limits and permissions
+- **Revenue flows:** epoch finalization, split accounting, member vs shareholder claims
+- **Adversarial/edge cases:** invalid callers, stale invites, duplicate actions, limit overflow, ordering races
+
+Exit criteria for production readiness:
+- green end-to-end flows via snforge suite
+- no unresolved high-severity invariants
+- deterministic SDK behavior on expected failure paths
+
+---
 
 ## 🤝 Contributing
 
