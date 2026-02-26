@@ -152,6 +152,16 @@ pub mod GuildToken {
         }
     }
 
+    #[external(v0)]
+    fn wire_addresses_once(
+        ref self: ContractState, governor_address: ContractAddress, guild_address: ContractAddress,
+    ) {
+        assert!(self.governor_address.read() == Zero::zero(), "{}", 'Governor already set');
+        assert!(self.guild_address.read() == Zero::zero(), "{}", 'Guild already set');
+        self.governor_address.write(governor_address);
+        self.guild_address.write(guild_address);
+    }
+
     #[abi(embed_v0)]
     impl GuildTokenImpl of IGuildToken<ContractState> {
         fn ping(ref self: ContractState) {
