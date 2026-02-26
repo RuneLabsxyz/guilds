@@ -15,6 +15,15 @@ interface ProposalTodo {
   lastTxHash: string;
 }
 
+interface TreasuryActivity {
+  id: number;
+  mode: 'transfer' | 'approve';
+  target: string;
+  token: string;
+  amount: string;
+  txHash: string;
+}
+
 function isStarknetAddress(value: string): value is `0x${string}` {
   return /^0x[0-9a-fA-F]+$/.test(value);
 }
@@ -43,6 +52,15 @@ export function App() {
   const [proposalForm, setProposalForm] = useState({ title: 'Fund toolchain grant', description: 'Approve monthly ops budget.' });
   const [proposalTodos, setProposalTodos] = useState<ProposalTodo[]>([]);
   const [governanceError, setGovernanceError] = useState<string | null>(null);
+  const [treasuryForm, setTreasuryForm] = useState({
+    guild: '0x111',
+    target: '0x777',
+    token: '0x222',
+    amount: '50',
+    mode: 'transfer' as 'transfer' | 'approve',
+  });
+  const [treasuryActivities, setTreasuryActivities] = useState<TreasuryActivity[]>([]);
+  const [treasuryError, setTreasuryError] = useState<string | null>(null);
 
   const bundle = useMemo(() => createBrowserClientBundle(network, factory), [network, factory]);
   const invokes = bundle.transport.getState().invokes;
@@ -75,6 +93,7 @@ export function App() {
         governor: addresses.governor,
       });
       setGovernorAddress(addresses.governor);
+      setTreasuryForm((prev) => ({ ...prev, guild: addresses.guild, token: addresses.token }));
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : 'Create guild failed');
     }
@@ -149,6 +168,37 @@ export function App() {
     }
   }
 
+  async function onTreasurySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTreasuryError(null);
+
+    try {
+      const actionType = treasuryForm.mode === 'transfer' ? 1 : 2;
+      const tx = await bundle.client.treasuryAction({
+        guild: treasuryForm.guild as `0x${string}`,
+        actionType,
+        target: treasuryForm.target as `0x${string}`,
+        token: treasuryForm.token as `0x${string}`,
+        amount: BigInt(treasuryForm.amount),
+        calldata: [],
+      });
+
+      setTreasuryActivities((prev) => [
+        {
+          id: prev.length + 1,
+          mode: treasuryForm.mode,
+          target: treasuryForm.target,
+          token: treasuryForm.token,
+          amount: treasuryForm.amount,
+          txHash: tx.transactionHash,
+        },
+        ...prev,
+      ]);
+    } catch (error) {
+      setTreasuryError(error instanceof Error ? error.message : 'Treasury action failed');
+    }
+  }
+
   return (
     <div className="page-shell">
       <header className="hero">
@@ -207,7 +257,7 @@ export function App() {
           </article>
           <article>
             <h3>Treasury Actions</h3>
-            <p>Send money and approval actions land in slice 4.</p>
+            <p>Send money and approve spender actions now available below.</p>
           </article>
         </div>
       </section>
@@ -268,6 +318,78 @@ export function App() {
           </ul>
         )}
         {governanceError ? <p className="error">{governanceError}</p> : null}
+      </section>
+
+      <section className="panel">
+        <h2>Treasury: Send Money / Approve</h2>
+        <form className="grid three" onSubmit={onTreasurySubmit}>
+          <label>
+            <span>Guild Address</span>
+            <input
+              value={treasuryForm.guild}
+              onChange={(event) => setTreasuryForm((prev) => ({ ...prev, guild: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Action</span>
+            <select
+              value={treasuryForm.mode}
+              onChange={(event) =>
+                setTreasuryForm((prev) => ({ ...prev, mode: event.target.value as 'transfer' | 'approve' }))
+              }
+            >
+              <option value="transfer">Send Money (transfer)</option>
+              <option value="approve">Get Approval (approve)</option>
+            </select>
+          </label>
+          <label>
+            <span>Target</span>
+            <input
+              value={treasuryForm.target}
+              onChange={(event) => setTreasuryForm((prev) => ({ ...prev, target: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Token</span>
+            <input
+              value={treasuryForm.token}
+              onChange={(event) => setTreasuryForm((prev) => ({ ...prev, token: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Amount</span>
+            <input
+              value={treasuryForm.amount}
+              onChange={(event) => setTreasuryForm((prev) => ({ ...prev, amount: event.target.value }))}
+            />
+          </label>
+          <div className="actions">
+            <button type="submit">Run Treasury Action</button>
+          </div>
+        </form>
+
+        {treasuryActivities.length === 0 ? (
+          <p className="empty">No treasury actions submitted yet.</p>
+        ) : (
+          <ul className="treasury-list">
+            {treasuryActivities.map((item) => (
+              <li key={item.id}>
+                <div>
+                  <h3>{item.mode === 'transfer' ? 'Transfer' : 'Approve'}</h3>
+                  <p>
+                    Target: <code>{item.target}</code>
+                  </p>
+                  <p>
+                    Token: <code>{item.token}</code>
+                  </p>
+                  <p>Amount: {item.amount}</p>
+                </div>
+                <code>{item.txHash}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+        {treasuryError ? <p className="error">{treasuryError}</p> : null}
       </section>
 
       <section className="panel">
