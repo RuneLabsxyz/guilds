@@ -7,3 +7,6 @@ profile/
 .direnv
 .envrc
 flake.lock
+.operator/
+sdk/node_modules/
+sdk/dist/

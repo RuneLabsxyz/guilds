@@ -37,3 +37,14 @@ jobs:
 
       - name: Run tests
         run: snforge test
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: SDK verify
+        working-directory: sdk
+        run: |
+          npm install
+          npm run verify
