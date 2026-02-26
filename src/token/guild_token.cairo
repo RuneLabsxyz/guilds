@@ -76,8 +76,8 @@ pub mod GuildToken {
                     contract.inactive_balance.write(0);
                 }
             }
-            if recipient != Zero::zero() && contract.inactivity_flags.read(recipient).flagged_at > 0
-            {
+            if recipient != Zero::zero()
+                && contract.inactivity_flags.read(recipient).flagged_at > 0 {
                 contract.inactive_balance.write(contract.inactive_balance.read() + amount);
             }
 

@@ -8,7 +8,7 @@ pub mod Guild {
         DistributionPolicy, EpochSnapshot, Member, PendingInvite, PluginConfig, RedemptionWindow,
         Role, ShareOffer,
     };
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::ContractAddress;
     use starknet::storage::{
         StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
     };

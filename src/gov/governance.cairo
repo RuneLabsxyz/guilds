@@ -1,5 +1,3 @@
-use starknet::ContractAddress;
-
 #[starknet::interface]
 pub trait IGovernanceWrap<TContractState> {
     fn initializer(ref self: TContractState);
@@ -13,8 +11,6 @@ pub mod GovernanceWrapComponent {
     use openzeppelin_governance::governor::{DefaultConfig, GovernorComponent};
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin_introspection::src5::SRC5Component::InternalImpl as SRC5InternalImpl;
-    use starknet::ContractAddress;
-
     #[storage]
     pub struct Storage {}
 
