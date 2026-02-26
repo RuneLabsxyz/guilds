@@ -12,3 +12,4 @@ sdk/node_modules/
 sdk/dist/
 examples/web-client/node_modules/
 examples/web-client/dist/
+examples/web-client/*.tsbuildinfo
