@@ -1,5 +1,6 @@
 use core::num::traits::Zero;
 use core::serde::Serde;
+use guilds::tests::constants::AsAddressTrait;
 use openzeppelin_interfaces::governance::extensions::{
     IGovernorSettingsAdminDispatcher, IGovernorSettingsAdminDispatcherTrait,
     IQuorumFractionDispatcher, IQuorumFractionDispatcherTrait,
@@ -22,19 +23,19 @@ pub trait IGuildGovernorView<TState> {
 }
 
 fn TOKEN_HOLDER() -> ContractAddress {
-    starknet::contract_address_const::<0x300>()
+    0x300.as_address()
 }
 
 fn VOTER() -> ContractAddress {
-    starknet::contract_address_const::<0x400>()
+    0x400.as_address()
 }
 
 fn GUILD_ADDR() -> ContractAddress {
-    starknet::contract_address_const::<0x200>()
+    0x200.as_address()
 }
 
 fn TOKEN_GOVERNOR_ADDR() -> ContractAddress {
-    starknet::contract_address_const::<0x100>()
+    0x100.as_address()
 }
 
 fn BASE_TS() -> u64 {
