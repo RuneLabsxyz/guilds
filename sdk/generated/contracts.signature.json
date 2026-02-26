@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "sources": {
+    "src/interfaces/factory.cairo": {
+      "functions": [
+        "create_guild",
+        "get_guild",
+        "is_name_taken",
+        "is_ticker_taken",
+        "get_all_guilds",
+        "guild_count"
+      ]
+    },
+    "src/interfaces/guild.cairo": {
+      "functions": [
+        "invite_member",
+        "accept_invite",
+        "kick_member",
+        "leave_guild",
+        "change_member_role",
+        "revoke_invite",
+        "create_role",
+        "modify_role",
+        "delete_role",
+        "execute_core_action",
+        "execute_plugin_action",
+        "ponzi_buy_land",
+        "ponzi_set_price",
+        "ponzi_claim_yield",
+        "ponzi_increase_stake",
+        "ponzi_withdraw_stake",
+        "register_plugin",
+        "toggle_plugin",
+        "set_distribution_policy",
+        "set_revenue_token",
+        "finalize_epoch",
+        "claim_player_revenue",
+        "claim_shareholder_revenue",
+        "create_share_offer",
+        "buy_shares",
+        "set_redemption_window",
+        "redeem_shares",
+        "dissolve",
+        "get_guild_name",
+        "get_guild_ticker",
+        "get_token_address",
+        "get_governor_address",
+        "get_member",
+        "get_role",
+        "get_role_count",
+        "get_member_count",
+        "get_pending_invite",
+        "get_plugin",
+        "get_distribution_policy",
+        "get_current_epoch",
+        "get_epoch_snapshot",
+        "get_active_offer",
+        "has_active_offer",
+        "get_redemption_window"
+      ]
+    },
+    "src/interfaces/token.cairo": {
+      "functions": [
+        "ping",
+        "get_last_activity",
+        "get_inactivity_threshold",
+        "flag_inactive",
+        "clear_inactivity_flag",
+        "is_flagged_inactive",
+        "get_inactivity_flag",
+        "active_supply",
+        "mint",
+        "burn",
+        "get_guild_address"
+      ]
+    }
+  }
+}
