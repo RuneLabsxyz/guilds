@@ -1,5 +1,3 @@
-use starknet::ContractAddress;
-
 /// Minimal mock contract for testing the v0.2 GuildComponent.
 /// Only embeds the GuildComponent — no ERC20 or Governor.
 #[starknet::contract]
