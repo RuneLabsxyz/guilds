@@ -159,6 +159,24 @@ button:hover {
   gap: 0.65rem;
 }
 
+.treasury-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.treasury-list li {
+  border: 1px solid #dbece1;
+  border-radius: 0.75rem;
+  padding: 0.7rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
 .todo-list li {
   border: 1px solid #dbece1;
   border-radius: 0.75rem;
