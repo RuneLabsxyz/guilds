@@ -10,3 +10,5 @@ flake.lock
 .operator/
 sdk/node_modules/
 sdk/dist/
+examples/web-client/node_modules/
+examples/web-client/dist/
