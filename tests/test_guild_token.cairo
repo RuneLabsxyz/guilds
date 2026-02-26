@@ -1,5 +1,6 @@
 use core::serde::Serde;
 use guilds::interfaces::token::{IGuildTokenDispatcher, IGuildTokenDispatcherTrait};
+use guilds::tests::constants::AsAddressTrait;
 use openzeppelin_interfaces::erc20::{
     IERC20Dispatcher, IERC20DispatcherTrait, IERC20MetadataDispatcher,
     IERC20MetadataDispatcherTrait,
@@ -12,27 +13,27 @@ use snforge_std::{
 use starknet::ContractAddress;
 
 fn HOLDER() -> ContractAddress {
-    starknet::contract_address_const::<0x111>()
+    0x111.as_address()
 }
 
 fn GOVERNOR() -> ContractAddress {
-    starknet::contract_address_const::<0x222>()
+    0x222.as_address()
 }
 
 fn GUILD() -> ContractAddress {
-    starknet::contract_address_const::<0x333>()
+    0x333.as_address()
 }
 
 fn ALICE() -> ContractAddress {
-    starknet::contract_address_const::<0x444>()
+    0x444.as_address()
 }
 
 fn BOB() -> ContractAddress {
-    starknet::contract_address_const::<0x555>()
+    0x555.as_address()
 }
 
 fn CHARLIE() -> ContractAddress {
-    starknet::contract_address_const::<0x666>()
+    0x666.as_address()
 }
 
 fn BASE_TS() -> u64 {

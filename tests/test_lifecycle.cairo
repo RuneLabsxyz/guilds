@@ -5,6 +5,7 @@ use guilds::guild::guild_contract::GuildComponent::InternalImpl;
 use guilds::mocks::guild::GuildMock;
 use guilds::models::constants::ActionType;
 use guilds::models::types::{Member, PendingInvite, Role};
+use guilds::tests::constants::AsAddressTrait;
 use snforge_std::{start_cheat_block_timestamp, start_cheat_caller_address, test_address};
 use starknet::ContractAddress;
 use starknet::storage::{
@@ -13,27 +14,27 @@ use starknet::storage::{
 };
 
 fn FOUNDER() -> ContractAddress {
-    starknet::contract_address_const::<0x100>()
+    0x100.as_address()
 }
 
 fn GOVERNOR() -> ContractAddress {
-    starknet::contract_address_const::<0x200>()
+    0x200.as_address()
 }
 
 fn TOKEN() -> ContractAddress {
-    starknet::contract_address_const::<0x300>()
+    0x300.as_address()
 }
 
 fn ALICE() -> ContractAddress {
-    starknet::contract_address_const::<0x400>()
+    0x400.as_address()
 }
 
 fn BOB() -> ContractAddress {
-    starknet::contract_address_const::<0x500>()
+    0x500.as_address()
 }
 
 fn CHARLIE() -> ContractAddress {
-    starknet::contract_address_const::<0x600>()
+    0x600.as_address()
 }
 
 type TestState = GuildMock::ContractState;
