@@ -15,6 +15,10 @@ pub mod interfaces {
     pub mod token;
 }
 
+pub mod factory {
+    pub mod guild_factory;
+}
+
 // ========================================================================
 // v0.1 Components (preserved during migration)
 // ========================================================================
@@ -43,10 +47,6 @@ pub mod token {
 
 pub mod governor {
     pub mod guild_governor;
-}
-
-pub mod factory {
-    pub mod guild_factory;
 }
 
 // Keep v0.1 for backward compatibility during migration
