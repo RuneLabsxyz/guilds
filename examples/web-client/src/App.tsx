@@ -4,6 +4,17 @@ import { createBrowserClientBundle } from './sdk/client';
 
 const NETWORKS: GuildsNetwork[] = ['local', 'sepolia', 'mainnet'];
 
+interface ProposalTodo {
+  id: number;
+  proposalId: bigint;
+  title: string;
+  description: string;
+  forVotes: number;
+  againstVotes: number;
+  abstainVotes: number;
+  lastTxHash: string;
+}
+
 function isStarknetAddress(value: string): value is `0x${string}` {
   return /^0x[0-9a-fA-F]+$/.test(value);
 }
@@ -28,6 +39,10 @@ export function App() {
     governor: string;
   } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [governorAddress, setGovernorAddress] = useState('0x333');
+  const [proposalForm, setProposalForm] = useState({ title: 'Fund toolchain grant', description: 'Approve monthly ops budget.' });
+  const [proposalTodos, setProposalTodos] = useState<ProposalTodo[]>([]);
+  const [governanceError, setGovernanceError] = useState<string | null>(null);
 
   const bundle = useMemo(() => createBrowserClientBundle(network, factory), [network, factory]);
   const invokes = bundle.transport.getState().invokes;
@@ -59,8 +74,78 @@ export function App() {
         token: addresses.token,
         governor: addresses.governor,
       });
+      setGovernorAddress(addresses.governor);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : 'Create guild failed');
+    }
+  }
+
+  async function onSubmitProposal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGovernanceError(null);
+
+    try {
+      const tx = await bundle.client.governanceAction({
+        governor: governorAddress as `0x${string}`,
+        targets: ['0x111'],
+        values: [0n],
+        calldatas: ['0x0'],
+        description: `${proposalForm.title}: ${proposalForm.description}`,
+      });
+
+      setProposalTodos((prev) => {
+        const id = prev.length + 1;
+        return [
+          {
+            id,
+            proposalId: BigInt(id),
+            title: proposalForm.title,
+            description: proposalForm.description,
+            forVotes: 0,
+            againstVotes: 0,
+            abstainVotes: 0,
+            lastTxHash: tx.transactionHash,
+          },
+          ...prev,
+        ];
+      });
+      setProposalForm({ title: '', description: '' });
+    } catch (error) {
+      setGovernanceError(error instanceof Error ? error.message : 'Submit proposal failed');
+    }
+  }
+
+  async function onVote(todoId: number, support: 0 | 1 | 2) {
+    setGovernanceError(null);
+    const proposal = proposalTodos.find((item) => item.id === todoId);
+    if (!proposal) {
+      return;
+    }
+
+    try {
+      const tx = await bundle.client.vote({
+        governor: governorAddress as `0x${string}`,
+        proposalId: proposal.proposalId,
+        support,
+      });
+
+      setProposalTodos((prev) =>
+        prev.map((item) => {
+          if (item.id !== todoId) {
+            return item;
+          }
+
+          return {
+            ...item,
+            forVotes: support === 1 ? item.forVotes + 1 : item.forVotes,
+            againstVotes: support === 0 ? item.againstVotes + 1 : item.againstVotes,
+            abstainVotes: support === 2 ? item.abstainVotes + 1 : item.abstainVotes,
+            lastTxHash: tx.transactionHash,
+          };
+        }),
+      );
+    } catch (error) {
+      setGovernanceError(error instanceof Error ? error.message : 'Vote failed');
     }
   }
 
@@ -118,13 +203,71 @@ export function App() {
           </article>
           <article>
             <h3>Governance + Vote Todo</h3>
-            <p>Proposal todo list and voting controls land in slice 3.</p>
+            <p>Proposal todo list and vote buttons now available below.</p>
           </article>
           <article>
             <h3>Treasury Actions</h3>
             <p>Send money and approval actions land in slice 4.</p>
           </article>
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>Governance Todo List</h2>
+        <form className="grid three" onSubmit={onSubmitProposal}>
+          <label>
+            <span>Governor Address</span>
+            <input value={governorAddress} onChange={(event) => setGovernorAddress(event.target.value)} />
+          </label>
+          <label>
+            <span>Proposal Title</span>
+            <input
+              value={proposalForm.title}
+              onChange={(event) => setProposalForm((prev) => ({ ...prev, title: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Proposal Description</span>
+            <input
+              value={proposalForm.description}
+              onChange={(event) => setProposalForm((prev) => ({ ...prev, description: event.target.value }))}
+            />
+          </label>
+          <div className="actions">
+            <button type="submit">Submit Proposal</button>
+          </div>
+        </form>
+
+        {proposalTodos.length === 0 ? (
+          <p className="empty">No proposal todos yet.</p>
+        ) : (
+          <ul className="todo-list">
+            {proposalTodos.map((item) => (
+              <li key={item.id}>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                  <p>
+                    Votes: <strong>For {item.forVotes}</strong> / Against {item.againstVotes} / Abstain {item.abstainVotes}
+                  </p>
+                  <code>{item.lastTxHash}</code>
+                </div>
+                <div className="vote-actions">
+                  <button type="button" onClick={() => onVote(item.id, 1)}>
+                    Vote For
+                  </button>
+                  <button type="button" onClick={() => onVote(item.id, 0)}>
+                    Vote Against
+                  </button>
+                  <button type="button" onClick={() => onVote(item.id, 2)}>
+                    Abstain
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {governanceError ? <p className="error">{governanceError}</p> : null}
       </section>
 
       <section className="panel">
