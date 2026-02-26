@@ -121,6 +121,24 @@ button:hover {
   align-items: center;
 }
 
+.actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.result {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid #cde2d4;
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+  background: #f5fff8;
+}
+
+.error {
+  color: #a22a3d;
+}
+
 .empty {
   color: #4d6758;
 }
