@@ -1,101 +1,107 @@
-# PonziLand Guilds Specifications (v0.1)
+#
+#  ____       _ _     _     _      
+# / ___|_   _(_) | __| |___| |__   
+#| |  _| | | | | |/ _` / __| '_ \  
+#| |_| | |_| | | | (_| \__ \ | | | 
+# \____|\__,_|_|_|\__,_|___/_| |_| 
+#
 
-Welcome to the **PonziLand Guilds** module—designed to introduce social, political, and economic dynamics through onchain guilds.
+# Guilds
 
----
+Guilds is a contract-first Starknet system for on-chain guild governance, treasury operations, and dual revenue distribution (members + shareholders).
 
-## 🔗 Quick Links
+## Architecture
 
-- **Website:** https://www.ponzi.land  
-- **Runelabs:** https://www.runelabs.xyz  
-- **Discord:** https://discord.gg/ponziland  
-- **Twitter (PonziDotLand):** https://x.com/ponzidotland  
-- **Twitter (RuneLabsxyz):** https://x.com/runelabsxyz
+- `src/guild/guild_contract.cairo`: guild core state machine (membership, roles, treasury, revenue, shares)
+- `src/token/guild_token.cairo`: ERC20Votes-style guild token with inactivity handling
+- `src/governor/guild_governor.cairo`: governance control plane
+- `src/models/*`: canonical structs, constants, and events
+- `tests/*.cairo`: unit + integration-style coverage by domain
+- `sdk/`: typed TypeScript SDK with compatibility gate and smoke tests
 
----
+## Quickstart
 
-## 🎯 Objectives
+### Contracts
 
-1. **Facilitate social community formation** inside the game
-2. **Introduce competitive and political narratives** via guild dynamics
-3. **Enable economic access and mobility** for smaller or new players
-4. **Support team-based esports** with in‑game guild competitions
+```bash
+# Option A: use your existing local Scarb/Snforge install
+scarb fmt --check --workspace
+snforge test
 
-*Guilds function as a DAO, an investment fund, and an esports team.*
+# Option B: project verify fallback
+bash -lc 'sozo test || scarb test'
+```
 
----
+### SDK
 
-## 🛠️ Basic Features
+```bash
+cd sdk
+npm install
+npm run verify
+```
 
-### Creating a Guild
+## Deployment / Stack Flow
 
-- **Capital requirement:** Player must deposit a minimum capital (e.g. $10) at creation.
-  - 1000 shares are minted; initial share value = capital / 1000.
-- **Metadata:**
-  - **Logo:** Generated via in‑game pattern designer and minted on-chain.
-  - **Guild name:** 4–50 chars; letters, numbers, spaces, dots; unique among active guilds.
-  - **Ticker:** 1–5 chars; letters, numbers, spaces, dots; globally unique.
-  - **Description:** Up to 4,000 characters (editable).
-- **Governance settings:** Default profit distribution and role‑based rules set by CEO at creation.
+Guilds uses Graphite stack workflows for incremental contract delivery.
 
-### Closing a Guild
+```bash
+gt create -m "feat(guilds): <scope>"
+gt restack --upstack --no-interactive
+gt submit --stack --no-interactive
+```
 
-- All members must leave or be removed.
-- CEO must resign to trigger on-chain guild closure.
-- A liquidation has been voted.
+Operator scripts:
 
-### Joining a Guild
+- `scripts/operator/repair-graphite-stack.sh`: detects/tracks untracked branches, restacks with fallback
+- `scripts/operator/qa-self-heal.sh`: verify-loop with deduplicated failure task generation
 
-| Type           | Behavior                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| **Public**     | Instant join; optional soft filters (level, experience).                                     |
-| **Private**    | Players submit join request with optional message.                                           |
-| **Invitation** | Officers send direct invites; bypass request queue.                                          |
-| **Management** | Officers can approve, reject, or blacklist; Master toggles recruitment status.               |
+## Test & Verify Flow
 
-### Player Management
+- Contracts: `scarb fmt --check --workspace && snforge test`
+- Fallback verify: `sozo test || scarb test`
+- SDK type + compat + tests + build: `cd sdk && npm run verify`
 
-- **Roles & Permissions:** Kick, ban, promote/demote
-- **Request Handling:** Approve, reject, blacklist
+## SDK (TS, Production-Oriented)
 
-### Season Scoring & Standings
+Package: `@runelabsxyz/guilds-sdk`
 
-Track guild performance metrics each season:
+- Typed client API (`core/client/types/utils/errors/config/bindings`)
+- Contract compatibility gate via `sdk/generated/contracts.signature.json`
+- Deterministic error model (`GuildsSdkError` with fixed error codes)
+- Retry support for transport operations
+- Example flows in `sdk/examples/`
 
-- Sum of player scores
-- Total land owned & assets
-- Stakes and supply metrics
-- Leaderboard positions
+Common flows:
 
----
+1. Create guild
+2. Register/wire addresses
+3. Governance action + vote
+4. Treasury and token/share operations
 
-## 💰 Economic Structure
+## Security Notes
 
-Guilds manage shared capital via an on-chain share system:
+- Governor-only and permission-gated boundaries enforced in guild logic
+- Explicit numeric bound checks (BPS sums, plugin action ranges)
+- Deterministic panic/error paths for negative scenarios
+- Event coverage for indexers (`src/models/events.cairo`)
 
-1. **Capital Building:** CEO deposits base capital; 1000 ERC‑20 shares minted.
-2. **Shareholding:** Players buy shares via on-chain rounds.
-3. **Voting:** Share count = voting power; used for share emissions and rate changes.
-4. **Emitting Shares:** 51% shareholder approval; public purchase round with proportional allocation.
+See `docs/CONTRACT-GUIDELINES-CHECKLIST.md` for itemized evidence.
 
-### Capital Distribution & Yield
+## Roadmap & Status
 
-- Guild owns a portfolio of tokens as idle capital.
-- Objective: maximize ROI by allocating to productive players.
+- Completed: data model, permissions, lifecycle, token, governor, treasury, revenue
+- Completed: SDK productization and operator automation
+- Stack integration pending: Graphite stack submit + merge
 
----
+Vault coverage is tracked in `docs/VAULT-COVERAGE.md`.
 
-## 🏛️ Guild Roles & Wallets
+## Release Notes Surface
 
-| Role           | Description                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| **Guild Master** | Elected CEO; sole issuer of major proposals; controls master wallet.                             |
-| **Co‑Leader**    | Second‑in‑command; assists Master; accesses high‑tier wallet.                                   |
-| **Officer**      | Manages membership, requests; accesses mid‑tier wallet.                                        |
-| **Member**       | Standard participant; accesses member wallet.                                                  |
-| **Recruit**      | Trial role; limited permissions; no wallet access.                                            |
+- Release readiness: `docs/RELEASE-READINESS.md`
+- SDK changelog: `sdk/CHANGELOG.md`
+- Contract spec: `docs/SPEC.md`
 
-- **Guild Wallets:** Five on-chain wallets, each gated by role for capital allocation and payouts.
+## License
 
 ---
 
